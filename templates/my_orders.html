@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% set title = "My Orders | BOOKVERSE AI" %}
+{% block content %}
+<section class="page-hero compact">
+    <div>
+        <span class="eyebrow">Customer orders</span>
+        <h1>Your recent purchases and tracking shortcuts.</h1>
+    </div>
+</section>
+<section class="order-card-list">
+    {% if order_rows %}
+        {% for order in order_rows %}
+            <article class="glass-card order-card">
+                <div class="order-card-head">
+                    <div>
+                        <span class="eyebrow">{{ order.order_number }}</span>
+                        <h2>{{ order.customer_name }}</h2>
+                        <p>{{ order.placed_on }} | {{ order.status }}</p>
+                    </div>
+                    <div class="order-actions">
+                        <strong>Rs. {{ order.total }}</strong>
+                        <a class="primary-btn" href="{{ url_for('track_order', order_number=order.order_number) }}">Track order</a>
+                    </div>
+                </div>
+                <p class="muted-copy">{{ order.address }}, {{ order.city }}, {{ order.state }} - {{ order.pincode }}</p>
+            </article>
+        {% endfor %}
+    {% else %}
+        <div class="glass-card promo-panel">
+            <p>No orders in this session yet. Place one from the cart to generate an order ID and tracking timeline.</p>
+        </div>
+    {% endif %}
+</section>
+{% endblock %}

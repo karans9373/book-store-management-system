@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% set title = "Book Clubs | BOOKVERSE AI" %}
+{% block content %}
+<section class="page-hero compact">
+    <div>
+        <span class="eyebrow">Book clubs</span>
+        <h1>Live rooms for readers who want accountability, taste, and conversation.</h1>
+    </div>
+</section>
+<section class="card-grid three-up">
+    {% for club in clubs %}
+        <article class="glass-card promo-panel">
+            <strong>{{ club.name }}</strong>
+            <p>{{ club.description }}</p>
+            <span>{{ club.meeting_time }}</span>
+            <button class="primary-btn" type="button">Join room</button>
+        </article>
+    {% endfor %}
+</section>
+{% endblock %}

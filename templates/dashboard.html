@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% set title = "Admin Dashboard | BOOKVERSE AI" %}
+{% block content %}
+<section class="page-hero compact dashboard-hero">
+    <div class="dashboard-hero-copy">
+        <span class="eyebrow">Admin dashboard</span>
+        <h1>Store performance at a glance.</h1>
+        <p class="dashboard-subcopy">Revenue, orders, visitor flow, inventory risk, and shipment activity in one clean view.</p>
+    </div>
+    <div class="glass-card dashboard-highlight">
+        <span class="eyebrow">Today snapshot</span>
+        <div class="dashboard-highlight-grid">
+            <div>
+                <strong>{{ stats.today_orders }}</strong>
+                <span>Orders</span>
+            </div>
+            <div>
+                <strong>Rs. {{ stats.today_revenue }}</strong>
+                <span>Revenue</span>
+            </div>
+            <div>
+                <strong>{{ stats.today_visitors }}</strong>
+                <span>Visitors</span>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="stat-grid dashboard-grid">
+    <article class="glass-card metric">
+        <span class="metric-label">Total revenue</span>
+        <strong>Rs. {{ stats.revenue }}</strong>
+        <small>All completed demo sales</small>
+    </article>
+    <article class="glass-card metric">
+        <span class="metric-label">Today revenue</span>
+        <strong>Rs. {{ stats.today_revenue }}</strong>
+        <small>Revenue booked today</small>
+    </article>
+    <article class="glass-card metric">
+        <span class="metric-label">Total orders</span>
+        <strong>{{ stats.total_orders }}</strong>
+        <small>Orders created so far</small>
+    </article>
+    <article class="glass-card metric">
+        <span class="metric-label">Today orders</span>
+        <strong>{{ stats.today_orders }}</strong>
+        <small>New orders today</small>
+    </article>
+    <article class="glass-card metric">
+        <span class="metric-label">Books sold</span>
+        <strong>{{ stats.books_sold }}</strong>
+        <small>Units sold across catalog</small>
+    </article>
+    <article class="glass-card metric">
+        <span class="metric-label">Sold today</span>
+        <strong>{{ stats.today_books_sold }}</strong>
+        <small>Units sold today</small>
+    </article>
+    <article class="glass-card metric">
+        <span class="metric-label">Visitors</span>
+        <strong>{{ stats.total_visitors }}</strong>
+        <small>Total storefront traffic</small>
+    </article>
+    <article class="glass-card metric">
+        <span class="metric-label">Visitors today</span>
+        <strong>{{ stats.today_visitors }}</strong>
+        <small>Fresh daily traffic</small>
+    </article>
+    <article class="glass-card metric">
+        <span class="metric-label">Page views</span>
+        <strong>{{ stats.page_views }}</strong>
+        <small>Across all visited screens</small>
+    </article>
+    <article class="glass-card metric">
+        <span class="metric-label">Inventory units</span>
+        <strong>{{ stats.inventory_units }}</strong>
+        <small>Total copies in stock</small>
+    </article>
+    <article class="glass-card metric metric-alert">
+        <span class="metric-label">Out of stock</span>
+        <strong>{{ stats.out_of_stock }}</strong>
+        <small>Titles needing replenishment</small>
+    </article>
+</section>
+<section class="grid-two">
+    <div class="glass-card chart-panel">
+        <span class="eyebrow">Best-selling titles</span>
+        <canvas id="salesChart" data-labels='{{ chart_labels|tojson }}' data-values='{{ chart_sales|tojson }}'></canvas>
+    </div>
+    <div class="glass-card chart-panel">
+        <span class="eyebrow">Daily visitors</span>
+        <canvas id="visitorChart" data-labels='{{ visitor_labels|tojson }}' data-values='{{ visitor_values|tojson }}'></canvas>
+    </div>
+</section>
+<section class="grid-two">
+    <div class="glass-card promo-panel">
+        <span class="eyebrow">Low stock alerts</span>
+        {% for book in low_stock %}
+            <div class="match-row">
+                <div><strong>{{ book.title }}</strong><p>{{ book.author }}</p></div>
+                <div><strong>{{ book.stock }}</strong><p>copies left</p></div>
+            </div>
+        {% endfor %}
+    </div>
+    <div class="glass-card promo-panel">
+        <span class="eyebrow">Recent orders</span>
+        {% for order in recent_orders %}
+            <div class="match-row">
+                <div><strong>{{ order.order_number }}</strong><p>{{ order.customer_name }} | {{ order.city }}</p></div>
+                <div><strong>Rs. {{ order.total }}</strong><p>{{ order.status }}</p></div>
+            </div>
+        {% endfor %}
+    </div>
+</section>
+{% endblock %}

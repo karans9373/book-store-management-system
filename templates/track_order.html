@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% set title = "Track Order | BOOKVERSE AI" %}
+{% block content %}
+<section class="page-hero compact">
+    <div>
+        <span class="eyebrow">Track order</span>
+        <h1>{{ order.order_number }} | {{ order.tracking_number }}</h1>
+        <p>{{ order.customer_name }} | {{ order.address }}, {{ order.city }}, {{ order.state }} - {{ order.pincode }}</p>
+    </div>
+</section>
+<section class="grid-two">
+    <div class="glass-card promo-panel">
+        <span class="eyebrow">Shipment status</span>
+        <div class="timeline">
+            {% for step in steps %}
+                <div class="timeline-step {% if step.done %}done{% endif %}">
+                    <span class="timeline-dot"></span>
+                    <div>
+                        <strong>{{ step.label }}</strong>
+                        <p>{{ "Completed" if step.done else "Pending" }}</p>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+    <div class="glass-card promo-panel">
+        <span class="eyebrow">Billing</span>
+        <div class="summary-row"><span>Payment</span><strong>{{ order.payment_status }}</strong></div>
+        <div class="summary-row"><span>Total</span><strong>Rs. {{ order.total }}</strong></div>
+        <div class="summary-row"><span>Expected delivery</span><strong>{{ order.expected_delivery }}</strong></div>
+    </div>
+</section>
+<section class="glass-card promo-panel">
+    <span class="eyebrow">Items in this order</span>
+    <div class="order-items-grid">
+        {% for item in items %}
+            <div class="order-line glass-card compact-card">
+                <img src="{{ item.cover_url if item.cover_url.startswith('http') else item.cover_url }}" alt="{{ item.title }}">
+                <div>
+                    <strong>{{ item.title }}</strong>
+                    <p>{{ item.author }}</p>
+                    <p>{{ item.qty }} x Rs. {{ item.price }}</p>
+                </div>
+                <strong>Rs. {{ item.line_total }}</strong>
+            </div>
+        {% endfor %}
+    </div>
+</section>
+{% endblock %}

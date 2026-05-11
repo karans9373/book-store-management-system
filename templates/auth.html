@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% set title = "Auth | BOOKVERSE AI" %}
+{% block content %}
+<section class="auth-shell">
+    <form class="glass-card form-card auth-card" method="post">
+        <input type="hidden" name="auth_mode" value="{{ mode }}">
+        <span class="eyebrow">{{ "Create account" if mode == "register" else "Welcome back" }}</span>
+        <h1>{{ "Start your premium reading profile" if mode == "register" else "Sign in to your reading dashboard" }}</h1>
+        <div class="auth-switch">
+            <a class="ghost-btn {% if mode == 'login' %}active-tab{% endif %}" href="/login">Login</a>
+            <a class="ghost-btn {% if mode == 'register' %}active-tab{% endif %}" href="/register">Sign Up</a>
+        </div>
+        {% if mode == "register" %}
+            <label>Name<input type="text" name="name" placeholder="Aanya" required></label>
+            <label>Email<input type="email" name="email" placeholder="reader@example.com" required></label>
+            <label>Phone<input type="text" name="phone" placeholder="9876543210" required></label>
+        {% else %}
+            <label>Email or Phone<input type="text" name="identifier" placeholder="reader@example.com or 9876543210" required></label>
+        {% endif %}
+        <label>Password<input type="password" name="password" placeholder="password"></label>
+        <button class="primary-btn" type="submit">{{ "Register / Continue" if mode == "register" else "Sign in and continue" }}</button>
+        <div class="glass-card compact-card">
+            <strong>Admin demo credentials</strong>
+            <p class="muted-copy">{{ admin_email }} / {{ admin_password }}</p>
+        </div>
+        <p class="muted-copy">
+            {% if mode == "register" %}
+                Already have an account? <a href="{{ url_for('auth') }}">Log in</a>
+            {% else %}
+                New here? <a href="{{ url_for('auth', _external=False).replace('/login', '/register') }}">Create one</a>
+            {% endif %}
+        </p>
+    </form>
+</section>
+{% endblock %}

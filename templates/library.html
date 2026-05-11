@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% set title = "My Library | BOOKVERSE AI" %}
+{% block content %}
+<section class="page-hero compact">
+    <div>
+        <span class="eyebrow">Student / library management</span>
+        <h1>Issue books, calculate fines, track due dates, and monitor members.</h1>
+    </div>
+</section>
+<section class="grid-two">
+    <form class="glass-card form-card" method="post" action="{{ url_for('issue_book') }}">
+        <h3>Issue a book</h3>
+        <label>Member name<input type="text" name="member_name" placeholder="R. Iyer"></label>
+        <label>Select title
+            <select name="book_id">
+                {% for book in books %}
+                    <option value="{{ book.id }}">{{ book.title }} · {{ book.author }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <button class="primary-btn" type="submit">Issue now</button>
+    </form>
+    <div class="glass-card promo-panel">
+        <span class="eyebrow">Reader badges</span>
+        {% for member in members %}
+            <div class="match-row">
+                <div><strong>{{ member.name }}</strong><p>@{{ member.handle }}</p></div>
+                <div><strong>{{ member.badge }}</strong><p>{{ member.streak }} day streak</p></div>
+            </div>
+        {% endfor %}
+    </div>
+</section>
+
+<section class="glass-card table-card">
+    <div class="section-head">
+        <div><span class="eyebrow">Borrow history</span><h2>Due date alerts and fine calculator</h2></div>
+    </div>
+    <table>
+        <thead>
+            <tr><th>Member</th><th>Book</th><th>Issue</th><th>Due</th><th>Status</th><th>Fine</th><th>Action</th></tr>
+        </thead>
+        <tbody>
+        {% for row in borrow_rows %}
+            <tr>
+                <td>{{ row.member_name }}</td>
+                <td>{{ row.title }}</td>
+                <td>{{ row.issue_date }}</td>
+                <td>{{ row.due_date }}</td>
+                <td>{% if row.returned %}Returned{% elif row.due_date < today %}Overdue{% else %}Issued{% endif %}</td>
+                <td>₹{{ row.fine }}</td>
+                <td>
+                    {% if not row.returned %}
+                        <form method="post" action="{{ url_for('return_book', record_id=row.id) }}">
+                            <button class="ghost-btn" type="submit">Mark return</button>
+                        </form>
+                    {% endif %}
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% endblock %}

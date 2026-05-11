@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% set title = "Genres | BOOKVERSE AI" %}
+{% block content %}
+<section class="page-hero compact">
+    <div>
+        <span class="eyebrow">Genres</span>
+        <h1>Curated lanes for fiction, academics, exam prep, thrillers, and more.</h1>
+    </div>
+</section>
+<section class="card-grid four-up">
+    {% for genre in groups %}
+        <a href="{{ url_for('store', genre=genre.genre) }}" class="glass-card genre-card large">
+            <strong>{{ genre.genre }}</strong>
+            <p>{{ genre.total }} titles · {{ "%.1f"|format(genre.avg_rating) }} average rating</p>
+            <span>Starting at ₹{{ genre.min_price }}</span>
+        </a>
+    {% endfor %}
+</section>
+{% endblock %}

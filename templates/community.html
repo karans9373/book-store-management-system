@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% set title = "Community | BOOKVERSE AI" %}
+{% block content %}
+<section class="page-hero compact">
+    <div>
+        <span class="eyebrow">Community</span>
+        <h1>Reading challenges, discussion rooms, reader profiles, and leaderboard energy.</h1>
+    </div>
+</section>
+<section class="grid-two">
+    <div class="glass-card promo-panel">
+        <span class="eyebrow">Challenges</span>
+        {% for challenge in challenges %}
+            <div class="challenge-row">
+                <strong>{{ challenge.name }}</strong>
+                <p>{{ challenge.participants }} participants</p>
+                <div class="progress-bar"><i style="width: {{ challenge.progress }}%"></i></div>
+            </div>
+        {% endfor %}
+    </div>
+    <div class="glass-card promo-panel">
+        <span class="eyebrow">Discussion rooms</span>
+        {% for thread in discussions %}
+            <div class="discussion-row">
+                <strong>{{ thread.topic }}</strong>
+                <p>{{ thread.club }} · {{ thread.replies }} replies</p>
+            </div>
+        {% endfor %}
+    </div>
+</section>
+<section class="section-block">
+    <div class="section-head"><div><span class="eyebrow">Leaderboard</span><h2>Top readers this month</h2></div></div>
+    <div class="card-grid four-up">
+        {% for user in top_readers %}
+            <article class="glass-card leaderboard-card">
+                <strong>{{ user.name }}</strong>
+                <p>@{{ user.handle }}</p>
+                <span>{{ user.streak }} day streak</span>
+                <span>{{ user.badge }}</span>
+            </article>
+        {% endfor %}
+    </div>
+</section>
+{% endblock %}

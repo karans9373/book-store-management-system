@@ -1,0 +1,172 @@
+{% extends "base.html" %}
+{% set title = "BOOKVERSE AI | Premium Book Platform" %}
+{% block content %}
+<section class="hero">
+    <div class="hero-copy">
+        <span class="eyebrow">Modern bookstore + AI reading suite</span>
+        <h1>Read, buy, manage, and discover books in one premium experience.</h1>
+        <p>BOOKVERSE AI blends a beautiful bookstore, live reading engine, community layer, and admin stack into a product that feels commercially ready.</p>
+        <div class="hero-actions">
+            <a class="primary-btn" href="{{ url_for('store') }}">Explore Store</a>
+            <a class="ghost-btn" href="{{ url_for('reader', book_id=1) }}">Open Demo Reader</a>
+        </div>
+        <div class="hero-metrics">
+            <div class="metric glass-card"><strong>8</strong><span>Seeded books</span></div>
+            <div class="metric glass-card"><strong>4</strong><span>Reader badges</span></div>
+            <div class="metric glass-card"><strong>3</strong><span>Book clubs live</span></div>
+        </div>
+    </div>
+    <div class="hero-stage">
+        <div class="bookshelf">
+            {% for book in featured %}
+                <a href="{{ url_for('book_detail', book_id=book.id) }}" class="floating-book" style="--delay: {{ loop.index0 }};">
+                    <img src="{{ url_for('cover_art', book_id=book.id) }}" alt="{{ book.title }} cover">
+                </a>
+            {% endfor %}
+        </div>
+        <div class="hero-panel glass-card">
+            <span>Quote of the day</span>
+            <h3>"A good reading product should feel like a room you want to stay in."</h3>
+            <p>BOOKVERSE AI pairs visual richness with utility: storefront, summaries, read-aloud, streaks, and operational dashboards.</p>
+        </div>
+    </div>
+</section>
+
+<section class="section-block">
+    <div class="section-head">
+        <div>
+            <span class="eyebrow">Trending now</span>
+            <h2>Books readers are obsessing over this week</h2>
+        </div>
+    </div>
+    <div class="slider-track" data-slider>
+        {% for book in trending %}
+            <article class="book-card glass-card">
+                <img src="{{ url_for('cover_art', book_id=book.id) }}" alt="{{ book.title }} cover">
+                <div>
+                    <span class="tag">{{ book.genre }}</span>
+                    <h3>{{ book.title }}</h3>
+                    <p>{{ book.author }}</p>
+                    <div class="price-row">
+                        <strong>₹{{ book.price }}</strong>
+                        <span>{{ book.rating }} ★</span>
+                    </div>
+                    <div class="action-row">
+                        <a class="ghost-btn" href="{{ url_for('book_detail', book_id=book.id) }}">Preview</a>
+                        <form method="post" action="{{ url_for('add_to_cart', book_id=book.id) }}">
+                            <button class="primary-btn" type="submit">Add to cart</button>
+                        </form>
+                    </div>
+                </div>
+            </article>
+        {% endfor %}
+    </div>
+</section>
+
+<section class="grid-two">
+    <div class="glass-card promo-panel">
+        <span class="eyebrow">AI Book Match Quiz</span>
+        <h2>Tell us your mood. We’ll build a reading stack.</h2>
+        <div class="mood-buttons">
+            <button class="chip" data-mood="happy">Happy reads</button>
+            <button class="chip" data-mood="thriller">Thrillers tonight</button>
+            <button class="chip" data-mood="exam">Exam prep mode</button>
+            <button class="chip" data-mood="weekend">Weekend reads</button>
+        </div>
+        <div id="mood-results" class="dynamic-results"></div>
+    </div>
+    <div class="glass-card promo-panel">
+        <span class="eyebrow">BookSoul Match</span>
+        <h2>Find readers with eerily compatible taste.</h2>
+        {% for match in matches %}
+            <div class="match-row">
+                <div>
+                    <strong>{{ match.reader.name }}</strong>
+                    <p>@{{ match.reader.handle }} ↔ @{{ match.partner.handle }}</p>
+                </div>
+                <div>
+                    <strong>{{ match.compatibility }}%</strong>
+                    <p>{{ match.bond }} · {{ match.spark_title }}</p>
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+</section>
+
+<section class="section-block">
+    <div class="section-head">
+        <div>
+            <span class="eyebrow">Discover</span>
+            <h2>New arrivals, best sellers, and genre collections</h2>
+        </div>
+    </div>
+    <div class="card-grid four-up">
+        {% for book in arrivals %}
+            <article class="mini-card glass-card">
+                <img src="{{ url_for('cover_art', book_id=book.id) }}" alt="{{ book.title }} cover">
+                <h3>{{ book.title }}</h3>
+                <p>{{ book.summary }}</p>
+            </article>
+        {% endfor %}
+    </div>
+    <div class="card-grid four-up genre-grid">
+        {% for genre in genres %}
+            <a href="{{ url_for('store', genre=genre.genre) }}" class="glass-card genre-card">
+                <strong>{{ genre.genre }}</strong>
+                <span>{{ genre.count }} curated titles</span>
+            </a>
+        {% endfor %}
+    </div>
+</section>
+
+<section class="section-block split-band">
+    <div>
+        <span class="eyebrow">Featured authors</span>
+        <h2>Writers with strong voice, strong cover design, and even stronger retention.</h2>
+        <div class="author-grid">
+            {% for author in authors %}
+                <article class="author-card glass-card">
+                    <img src="{{ url_for('author_avatar', name=author.author|replace(' ', '-')) }}" alt="{{ author.author }}">
+                    <strong>{{ author.author }}</strong>
+                    <span>{{ author.titles }} books · {{ "%.1f"|format(author.rating) }} ★</span>
+                </article>
+            {% endfor %}
+        </div>
+    </div>
+    <div class="glass-card deals-panel">
+        <span class="eyebrow">Premium extras</span>
+        <ul class="plain-list">
+            <li>Blind Date with a Book mystery purchase</li>
+            <li>AI summary in 60 seconds</li>
+            <li>Voice read-aloud mode in browser</li>
+            <li>Reading streak tracker and badge system</li>
+            <li>Upcoming release countdown and author event callouts</li>
+        </ul>
+    </div>
+</section>
+
+<section class="section-block">
+    <div class="section-head">
+        <div>
+            <span class="eyebrow">Recommendation engine</span>
+            <h2>Mood-driven discovery rails</h2>
+        </div>
+    </div>
+    <div class="recommendation-grid">
+        {% for label, items in recommendation_groups.items() %}
+            <div class="glass-card mood-column">
+                <h3>{{ label }}</h3>
+                {% for book in items[:3] %}
+                    <a href="{{ url_for('book_detail', book_id=book.id) }}" class="book-inline">
+                        <img src="{{ url_for('cover_art', book_id=book.id) }}" alt="{{ book.title }}">
+                        <div>
+                            <strong>{{ book.title }}</strong>
+                            <span>{{ book.author }}</span>
+                        </div>
+                    </a>
+                {% endfor %}
+            </div>
+        {% endfor %}
+    </div>
+</section>
+{% endblock %}

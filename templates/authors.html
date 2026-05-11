@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% set title = "Authors | BOOKVERSE AI" %}
+{% block content %}
+<section class="page-hero compact">
+    <div>
+        <span class="eyebrow">Authors</span>
+        <h1>Featured writers, ratings, and catalog depth.</h1>
+    </div>
+</section>
+<section class="card-grid three-up">
+    {% for writer in writers %}
+        <article class="glass-card author-card large">
+            <img src="{{ url_for('author_avatar', name=writer.author|replace(' ', '-')) }}" alt="{{ writer.author }}">
+            <strong>{{ writer.author }}</strong>
+            <span>{{ writer.total }} books · {{ "%.1f"|format(writer.rating) }} ★</span>
+            <p>{{ writer.stock }} copies currently in inventory.</p>
+        </article>
+    {% endfor %}
+</section>
+{% endblock %}

@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% set title = "Orders | BOOKVERSE AI" %}
+{% block content %}
+<section class="page-hero compact">
+    <div>
+        <span class="eyebrow">Admin orders</span>
+        <h1>Shipment addresses, purchased items, cover photos, totals, and printable invoices.</h1>
+    </div>
+</section>
+<section class="order-card-list">
+    {% for row in order_rows %}
+        <article class="glass-card order-card">
+            <div class="order-card-head">
+                <div>
+                    <span class="eyebrow">Order {{ row.order.order_number }}</span>
+                    <h2>{{ row.order.customer_name }}</h2>
+                    <p>{{ row.order.phone }} | {{ row.order.email }}</p>
+                </div>
+                <div class="order-actions">
+                    <strong>Rs. {{ row.order.total }}</strong>
+                    <a class="ghost-btn" href="{{ url_for('track_order', order_number=row.order.order_number) }}">Track</a>
+                    <a class="primary-btn print-btn" href="{{ url_for('print_order', order_id=row.order.id) }}" target="_blank">Print order</a>
+                </div>
+            </div>
+            <div class="order-address glass-card compact-card">
+                <strong>Shipment address</strong>
+                <p>{{ row.order.address }}, {{ row.order.city }}, {{ row.order.state }} - {{ row.order.pincode }}</p>
+                <p>Status: {{ row.order.status }} | Payment: {{ row.order.payment_status }} | Tracking: {{ row.order.tracking_number }}</p>
+            </div>
+            <div class="order-items-grid">
+                {% for item in row.line_items %}
+                    <div class="order-line glass-card compact-card">
+                        <img src="{{ item.cover_url if item.cover_url.startswith('http') else item.cover_url }}" alt="{{ item.title }}">
+                        <div>
+                            <strong>{{ item.title }}</strong>
+                            <p>{{ item.author }}</p>
+                            <p>{{ item.qty }} x Rs. {{ item.price }}</p>
+                        </div>
+                        <strong>Rs. {{ item.line_total }}</strong>
+                    </div>
+                {% endfor %}
+            </div>
+        </article>
+    {% endfor %}
+</section>
+{% endblock %}

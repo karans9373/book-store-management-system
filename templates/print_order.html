@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Print {{ order.order_number }}</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 32px; color: #111; }
+        h1, h2, h3 { margin: 0 0 12px; }
+        .meta, .address, .line { margin-bottom: 18px; }
+        .line { display: flex; gap: 16px; align-items: center; border-bottom: 1px solid #ddd; padding: 12px 0; }
+        .line img { width: 72px; height: 104px; object-fit: cover; border-radius: 8px; }
+        .row { display: flex; justify-content: space-between; gap: 16px; }
+        .total { font-size: 20px; font-weight: 700; margin-top: 24px; }
+        @media print { .print-note { display: none; } }
+    </style>
+</head>
+<body onload="window.print()">
+    <p class="print-note">This page opens ready to print.</p>
+    <h1>BOOKVERSE AI Order Detail</h1>
+    <div class="meta">
+        <h3>{{ order.order_number }}</h3>
+        <p>Tracking: {{ order.tracking_number }}</p>
+        <p>Status: {{ order.status }} | Payment: {{ order.payment_status }}</p>
+        <p>Placed on: {{ order.placed_on }} | Expected delivery: {{ order.expected_delivery }}</p>
+    </div>
+    <div class="address">
+        <h3>Customer</h3>
+        <p>{{ order.customer_name }} | {{ order.phone }} | {{ order.email }}</p>
+        <p>{{ order.address }}, {{ order.city }}, {{ order.state }} - {{ order.pincode }}</p>
+    </div>
+    <h3>Items</h3>
+    {% for item in items %}
+        <div class="line">
+            <img src="{{ item.cover_url if item.cover_url.startswith('http') else item.cover_url }}" alt="{{ item.title }}">
+            <div>
+                <strong>{{ item.title }}</strong>
+                <p>{{ item.author }}</p>
+                <p>{{ item.qty }} x Rs. {{ item.price }}</p>
+            </div>
+            <strong>Rs. {{ item.line_total }}</strong>
+        </div>
+    {% endfor %}
+    <div class="row total">
+        <span>Order total</span>
+        <span>Rs. {{ order.total }}</span>
+    </div>
+</body>
+</html>

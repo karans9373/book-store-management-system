@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% set title = "Cart | BOOKVERSE AI" %}
+{% block content %}
+<section class="page-hero compact">
+    <div>
+        <span class="eyebrow">Cart</span>
+        <h1>Review your books, then move into shipping and payment.</h1>
+    </div>
+</section>
+<section class="grid-two">
+    <div class="glass-card promo-panel">
+        <span class="eyebrow">Cart items</span>
+        {% if items %}
+            {% for item in items %}
+                <div class="cart-row">
+                    <img src="{{ url_for('cover_art', book_id=item.book.id) }}" alt="{{ item.book.title }}">
+                    <div>
+                        <strong>{{ item.book.title }}</strong>
+                        <p>{{ item.qty }} x Rs. {{ item.book.price }}</p>
+                        <small class="muted-copy">{{ item.book.stock }} left in stock</small>
+                    </div>
+                    <strong>Rs. {{ item.subtotal }}</strong>
+                </div>
+            {% endfor %}
+            <div class="checkout-total">
+                <strong>Total</strong>
+                <strong>Rs. {{ total }}</strong>
+            </div>
+            <a class="primary-btn" href="{{ url_for('checkout') }}">Continue to shipping and payment</a>
+        {% else %}
+            <p>Your cart is empty. Start with a book from the live inventory.</p>
+        {% endif %}
+    </div>
+    <div class="glass-card promo-panel">
+        <span class="eyebrow">Blind Date with a Book</span>
+        {% if blind_date %}
+            <img src="{{ url_for('cover_art', book_id=blind_date.id) }}" alt="Mystery cover" class="mystery-cover">
+            <h3>Mystery pick for Rs. 299</h3>
+            <p>Hidden genre hints, premium packaging feel, and a surprise recommendation path.</p>
+        {% endif %}
+        <p class="muted-copy">Checkout collects name, phone, address, city, state, pincode, and generates a real demo order ID plus a tracking number.</p>
+    </div>
+</section>
+{% endblock %}

@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% set title = "Reader | " ~ book.title %}
+{% block content %}
+<section class="reader-shell" data-reader data-book-id="{{ book.id }}">
+    <aside class="glass-card reader-tools">
+        <span class="eyebrow">Reader preview</span>
+        <h1>{{ book.title }}</h1>
+        <p>{{ book.author }}</p>
+        <div class="meta-line">
+            <span>{{ book.genre }}</span>
+            <span>{{ "Real text source" if book.text_url else "Guided content source" }}</span>
+        </div>
+        <div class="tool-group">
+            <button class="ghost-btn" data-reader-mode="light">Day</button>
+            <button class="ghost-btn" data-reader-mode="night">Night</button>
+            <button class="ghost-btn" data-reader-speak>Read aloud</button>
+        </div>
+        <div class="tool-group">
+            <label>Font size</label>
+            <input type="range" min="16" max="24" value="19" data-font-size>
+        </div>
+        <div class="tool-group">
+            <button class="ghost-btn" data-bookmark>Bookmark page</button>
+            <button class="ghost-btn" data-highlight>Highlight quote</button>
+        </div>
+        <textarea id="reader-note" placeholder="Write notes while reading..."></textarea>
+        <div class="reader-progress">
+            <span>Progress</span>
+            <div class="progress-bar"><i data-progress-bar></i></div>
+            <small data-progress-text>Page 1 / {{ reader_pages|length }}</small>
+        </div>
+        <div class="glass-card companion-box">
+            <h3>AI Reading Companion</h3>
+            <input type="text" id="companion-prompt" placeholder="Ask about a theme, chapter, or summary">
+            <button class="primary-btn" data-companion>Ask companion</button>
+            <p id="companion-response">Ask anything about this title's summary or themes.</p>
+        </div>
+    </aside>
+
+    <div class="reader-stage">
+        <div class="flipbook glass-card">
+            {% for page in reader_pages %}
+                <article class="reader-page{% if loop.first %} active current{% endif %}" data-page="{{ loop.index }}">
+                    <div class="page-number">{{ "%02d"|format(loop.index) }}</div>
+                    <div class="reader-text"><p>{{ page|replace('\n\n', '</p><p>')|replace('\n', '<br>')|safe }}</p></div>
+                </article>
+            {% endfor %}
+        </div>
+        <div class="action-row reader-nav">
+            <button class="ghost-btn" data-prev-page>Previous</button>
+            <button class="primary-btn" data-next-page>Next page</button>
+        </div>
+    </div>
+</section>
+{% endblock %}

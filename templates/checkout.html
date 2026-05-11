@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% set title = "Checkout | BOOKVERSE AI" %}
+{% block content %}
+<section class="page-hero compact">
+    <div>
+        <span class="eyebrow">Checkout</span>
+        <h1>Shipping, billing, and demo payment in one flow.</h1>
+    </div>
+</section>
+<section class="grid-two">
+    <form class="glass-card form-card" method="post">
+        <label>Name<input type="text" name="name" value="{{ form.get('name', current_user_name if current_user_name != 'Guest' else '') }}" placeholder="Aanya Sharma" required></label>
+        <label>Email<input type="email" name="email" value="{{ form.get('email', session.get('user_email', '')) }}" placeholder="reader@example.com" required></label>
+        <label>Phone<input type="text" name="phone" value="{{ form.get('phone', '') }}" placeholder="9876543210" required></label>
+        <label>Address<textarea name="address" placeholder="Flat, street, landmark" required>{{ form.get('address', '') }}</textarea></label>
+        <label>City<input type="text" name="city" value="{{ form.get('city', '') }}" placeholder="Noida" required></label>
+        <label>State<input type="text" name="state" value="{{ form.get('state', '') }}" placeholder="Uttar Pradesh" required></label>
+        <label>Pincode<input type="text" name="pincode" value="{{ form.get('pincode', '') }}" placeholder="201301" required></label>
+        <label>Coupon<input type="text" name="coupon" value="{{ form.get('coupon', '') }}" placeholder="BOOKVERSE150"></label>
+        <div class="glass-card compact-card">
+            <strong>Payment demo</strong>
+            <p class="muted-copy">For this demo, clicking the payment button marks the order as paid successfully, generates an order ID, and opens tracking.</p>
+        </div>
+        <button class="primary-btn" type="submit">Pay successfully and place order</button>
+    </form>
+    <div class="glass-card promo-panel">
+        <span class="eyebrow">Billing summary</span>
+        {% for item in items %}
+            <div class="summary-row">
+                <span>{{ item.book.title }} x {{ item.qty }}</span>
+                <strong>Rs. {{ item.subtotal }}</strong>
+            </div>
+        {% endfor %}
+        <div class="checkout-total">
+            <strong>Subtotal</strong>
+            <strong>Rs. {{ total }}</strong>
+        </div>
+        <p class="muted-copy">If coupon `BOOKVERSE150` is used, the backend applies it and stores the discounted total in the order record.</p>
+    </div>
+</section>
+{% endblock %}

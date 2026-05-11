@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% set title = "Wishlist | BOOKVERSE AI" %}
+{% block content %}
+<section class="page-hero compact">
+    <div>
+        <span class="eyebrow">Wishlist</span>
+        <h1>Your saved premium reading stack.</h1>
+    </div>
+</section>
+<section class="card-grid three-up">
+    {% for entry in entries %}
+        <article class="book-card glass-card tall">
+            <img src="{{ url_for('cover_art', book_id=entry.id) }}" alt="{{ entry.title }}">
+            <div>
+                <h3>{{ entry.title }}</h3>
+                <p>{{ entry.author }}</p>
+                <p>{{ entry.summary }}</p>
+                <form method="post" action="{{ url_for('add_to_cart', book_id=entry.id) }}">
+                    <button class="primary-btn" type="submit">Move to cart</button>
+                </form>
+            </div>
+        </article>
+    {% endfor %}
+</section>
+{% endblock %}

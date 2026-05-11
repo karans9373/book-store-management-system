@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ title or "BOOKVERSE AI" }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="site-shell">
+        <header class="topbar">
+            <a href="{{ url_for('home') }}" class="brand-mark">
+                <span class="brand-badge">BV</span>
+                <div>
+                    <strong>BOOKVERSE AI</strong>
+                    <small>Real catalog + reader + order ops</small>
+                </div>
+            </a>
+            <nav class="nav-links">
+                <a href="{{ url_for('store') }}">Store</a>
+                <a href="{{ url_for('community') }}">Community</a>
+                <a href="{{ url_for('store') }}#ai-suggest">AI Suggestions</a>
+                {% if is_admin %}
+                    <a href="{{ url_for('admin_dashboard') }}">Admin Dashboard</a>
+                    <a href="{{ url_for('orders') }}">Orders</a>
+                {% else %}
+                    <a href="{{ url_for('my_orders') }}">My Orders</a>
+                {% endif %}
+            </nav>
+            <div class="topbar-actions">
+                <button class="ghost-btn" data-theme-toggle>Theme</button>
+                {% if not is_admin %}
+                    <a class="ghost-btn" href="{{ url_for('wishlist') }}">Wishlist {{ wishlist_count }}</a>
+                    <a class="ghost-btn" href="{{ url_for('cart') }}">Cart {{ cart_count }}</a>
+                    <a class="ghost-btn" href="{{ url_for('my_orders') }}">Orders {{ my_orders_count }}</a>
+                {% endif %}
+                {% if session.get('user_name') %}
+                    <div class="account-chip glass-card">
+                        <strong>{{ current_user_name }}</strong>
+                        <small>
+                            {% if is_admin %}Admin{% else %}{{ current_user_phone or current_user_email }}{% endif %}
+                        </small>
+                    </div>
+                    <a class="primary-btn logout-btn" href="{{ url_for('logout') }}">Logout</a>
+                {% else %}
+                    <a class="primary-btn" href="{{ url_for('auth') }}">Sign In</a>
+                {% endif %}
+            </div>
+        </header>
+
+        <div class="mega-menu glass-card">
+            <a href="{{ url_for('genres') }}">Genres</a>
+            <a href="{{ url_for('authors') }}">Authors</a>
+            <a href="{{ url_for('clubs') }}">Book Clubs</a>
+            {% if is_admin %}
+                <a href="{{ url_for('inventory') }}">Inventory</a>
+                <a href="{{ url_for('orders') }}">Printable Orders</a>
+            {% else %}
+                <a href="{{ url_for('store') }}#ai-suggest">Ask AI</a>
+                <a href="{{ url_for('track_order', order_number=session.get('last_order_number', '')) if session.get('last_order_number') else url_for('my_orders') }}">Track Order</a>
+            {% endif %}
+            <a href="{{ url_for('contact') }}">Contact</a>
+            <a href="{{ url_for('about') }}">About</a>
+        </div>
+
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                <div class="flash-stack">
+                    {% for message in messages %}
+                        <div class="flash">{{ message }}</div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        <main>
+            {% block content %}{% endblock %}
+        </main>
+
+        <footer class="site-footer">
+            <div>
+                <strong>BOOKVERSE AI</strong>
+                <p>Premium bookstore, 500+ title inventory, real-reader previews, order tracking, and analytics in one Flask app.</p>
+            </div>
+            <div class="footer-links">
+                <a href="{{ url_for('store') }}">Browse inventory</a>
+                <a href="{{ url_for('my_orders') if not is_admin else url_for('orders') }}">Track commerce</a>
+                <a href="{{ url_for('admin_dashboard') if is_admin else url_for('auth') }}">Analytics</a>
+            </div>
+            <div>
+                <small>&copy; {{ current_year }} BOOKVERSE AI</small>
+            </div>
+        </footer>
+    </div>
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>

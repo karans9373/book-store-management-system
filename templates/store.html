@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% set title = "Store | BOOKVERSE AI" %}
+{% block content %}
+<section class="page-hero compact">
+    <div>
+        <span class="eyebrow">Book store</span>
+        <h1>Browse a 500+ title inventory with live stock, real covers, and readable previews.</h1>
+        <div class="meta-line">
+            <span>{{ counts.titles }} titles</span>
+            <span>{{ counts.inventory }} copies in inventory</span>
+            <span>{{ counts.out_of_stock }} out of stock</span>
+        </div>
+    </div>
+</section>
+
+{% if not is_admin %}
+<section id="ai-suggest" class="grid-two">
+    <div class="glass-card promo-panel">
+        <span class="eyebrow">AI Store Assistant</span>
+        <h2>Ask for a subject, title, or topic and get purchasable options.</h2>
+        <div class="assistant-form">
+            <input type="text" id="assistantPrompt" placeholder="Try: science, mystery, history, Shakespeare, reasoning">
+            <button class="primary-btn" type="button" data-store-assistant>Find books</button>
+        </div>
+        <p class="muted-copy">Example: type `science` and the assistant will respond with available science-related books, brief details, ratings, and add-to-cart actions.</p>
+    </div>
+    <div class="glass-card promo-panel">
+        <span class="eyebrow">Assistant response</span>
+        <div id="assistantMessage" class="assistant-message">Ask for a topic and the assistant will return available options from the current store inventory.</div>
+        <div id="assistantResults" class="assistant-results"></div>
+    </div>
+</section>
+{% endif %}
+
+<section class="store-layout">
+    <aside class="glass-card filter-panel">
+        <form method="get" class="filter-form">
+            <input type="text" name="search" placeholder="Search titles, authors, genres" value="{{ request.args.get('search', '') }}">
+            <select name="genre">
+                <option value="">All genres</option>
+                {% for genre in facets.genres %}
+                    <option value="{{ genre.genre }}" {% if request.args.get('genre') == genre.genre %}selected{% endif %}>{{ genre.genre }}</option>
+                {% endfor %}
+            </select>
+            <select name="author">
+                <option value="">All authors</option>
+                {% for author in facets.authors %}
+                    <option value="{{ author.author }}" {% if request.args.get('author') == author.author %}selected{% endif %}>{{ author.author }}</option>
+                {% endfor %}
+            </select>
+            <select name="language">
+                <option value="">All languages</option>
+                {% for language in facets.languages %}
+                    <option value="{{ language.language }}" {% if request.args.get('language') == language.language %}selected{% endif %}>{{ language.language }}</option>
+                {% endfor %}
+            </select>
+            <select name="rating">
+                <option value="">Any rating</option>
+                <option value="4.0">4.0+</option>
+                <option value="4.5">4.5+</option>
+                <option value="4.8">4.8+</option>
+            </select>
+            <select name="price">
+                <option value="">Any price</option>
+                <option value="400">Under Rs. 400</option>
+                <option value="600">Under Rs. 600</option>
+                <option value="800">Under Rs. 800</option>
+                <option value="1200">Under Rs. 1200</option>
+            </select>
+            <select name="availability">
+                <option value="">All stock states</option>
+                <option value="in" {% if request.args.get('availability') == 'in' %}selected{% endif %}>In stock</option>
+                <option value="out" {% if request.args.get('availability') == 'out' %}selected{% endif %}>Out of stock</option>
+            </select>
+            <button class="primary-btn" type="submit">Apply filters</button>
+        </form>
+    </aside>
+
+    <div class="catalog-grid">
+        {% for book in books %}
+            <article class="book-card glass-card tall">
+                <img src="{{ url_for('cover_art', book_id=book.id) }}" alt="{{ book.title }} cover" loading="lazy">
+                <div>
+                    <div class="tag-row">
+                        <span class="tag">{{ book.genre }}</span>
+                        <span class="tag muted">{{ book.language }}</span>
+                        {% if book.source_name == "gutendex" %}
+                            <span class="tag">Real text preview</span>
+                        {% endif %}
+                    </div>
+                    <h3>{{ book.title }}</h3>
+                    <p>{{ book.author }}</p>
+                    <p class="muted-copy">{{ book.description }}</p>
+                    <div class="meta-line">
+                        <span>{{ book.rating }} / 5</span>
+                        <span>{{ book.pages }}-page reader preview</span>
+                        <span>{{ book.sold_count }} sold</span>
+                    </div>
+                    <div class="price-row">
+                        <strong>Rs. {{ book.price }}</strong>
+                        {% if book.stock > 0 %}
+                            <span class="stock-pill in-stock">{{ book.stock }} available</span>
+                        {% else %}
+                            <span class="stock-pill out-stock">Out of stock</span>
+                        {% endif %}
+                    </div>
+                    <div class="action-row stacked-mobile">
+                        <a class="ghost-btn" href="{{ url_for('book_detail', book_id=book.id) }}">Preview</a>
+                        <a class="ghost-btn" href="{{ url_for('reader', book_id=book.id) }}">Read 10 pages</a>
+                        {% if not is_admin %}
+                            <form method="post" action="{{ url_for('add_to_wishlist', book_id=book.id) }}">
+                                <button class="ghost-btn" type="submit">Wishlist</button>
+                            </form>
+                            <form method="post" action="{{ url_for('add_to_cart', book_id=book.id) }}" data-ajax-cart>
+                                <button class="primary-btn" type="submit" {% if book.stock <= 0 %}disabled{% endif %}>
+                                    {% if book.stock > 0 %}Add to cart{% else %}Out of stock{% endif %}
+                                </button>
+                            </form>
+                        {% endif %}
+                    </div>
+                </div>
+            </article>
+        {% endfor %}
+    </div>
+</section>
+{% endblock %}

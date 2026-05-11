@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% set title = book.title ~ " | BOOKVERSE AI" %}
+{% block content %}
+<section class="detail-layout">
+    <div class="detail-cover glass-card">
+        <img src="{{ url_for('cover_art', book_id=book.id) }}" alt="{{ book.title }}">
+        <div class="action-row stacked-mobile">
+            {% if not is_admin %}
+                <form method="post" action="{{ url_for('add_to_cart', book_id=book.id) }}">
+                    <button class="primary-btn" type="submit" {% if book.stock <= 0 %}disabled{% endif %}>
+                        {% if book.stock > 0 %}Add to cart{% else %}Out of stock{% endif %}
+                    </button>
+                </form>
+            {% endif %}
+            <a class="ghost-btn" href="{{ url_for('reader', book_id=book.id) }}">Open 10-page reader</a>
+            {% if not is_admin %}
+                <form method="post" action="{{ url_for('add_to_wishlist', book_id=book.id) }}">
+                    <button class="ghost-btn" type="submit">Wishlist</button>
+                </form>
+            {% endif %}
+        </div>
+    </div>
+    <div class="detail-copy">
+        <span class="eyebrow">{{ book.genre }} | {{ book.language }}</span>
+        <h1>{{ book.title }}</h1>
+        <p class="lede">By {{ book.author }} | {{ book.rating }} / 5 | Rs. {{ book.price }}</p>
+        <div class="meta-line">
+            {% if book.stock > 0 %}
+                <span class="stock-pill in-stock">{{ book.stock }} copies available</span>
+            {% else %}
+                <span class="stock-pill out-stock">Out of stock</span>
+            {% endif %}
+            <span>{{ book.sold_count }} sold</span>
+            <span>{{ "Real public-domain preview" if book.text_url else "Guided demo preview" }}</span>
+        </div>
+        <p>{{ book.description }}</p>
+        <div class="glass-card info-card">
+            <h3>Book summary</h3>
+            <p>{{ book.summary }}</p>
+        </div>
+        <div class="glass-card info-card">
+            <h3>Opening line / preview signal</h3>
+            <p>{{ book.excerpt }}</p>
+        </div>
+    </div>
+</section>
+
+<section class="grid-two">
+    <div class="glass-card promo-panel">
+        <span class="eyebrow">Reader reviews</span>
+        {% for review in reviews %}
+            <div class="review-row">
+                <strong>{{ review.reviewer }}</strong>
+                <span>{{ review.rating }} / 5</span>
+                <p>{{ review.comment }}</p>
+            </div>
+        {% endfor %}
+    </div>
+    <div class="glass-card promo-panel">
+        <span class="eyebrow">Author profile</span>
+        <div class="author-spotlight">
+            <img src="{{ url_for('author_avatar', name=book.author|replace(' ', '-')) }}" alt="{{ book.author }}">
+            <div>
+                <h3>{{ book.author }}</h3>
+                <p>{{ author_books|length }} related title(s) on BOOKVERSE AI. Covers and previews are rendered directly from the catalog record.</p>
+            </div>
+        </div>
+        <div class="book-inline-list">
+            {% for other in author_books %}
+                <a href="{{ url_for('book_detail', book_id=other.id) }}" class="book-inline">
+                    <img src="{{ url_for('cover_art', book_id=other.id) }}" alt="{{ other.title }}">
+                    <div><strong>{{ other.title }}</strong><span>{{ other.genre }}</span></div>
+                </a>
+            {% endfor %}
+        </div>
+    </div>
+</section>
+
+<section class="section-block">
+    <div class="section-head">
+        <div>
+            <span class="eyebrow">Related books</span>
+            <h2>Keep the same reading energy going</h2>
+        </div>
+    </div>
+    <div class="card-grid four-up">
+        {% for item in related %}
+            <a href="{{ url_for('book_detail', book_id=item.id) }}" class="mini-card glass-card">
+                <img src="{{ url_for('cover_art', book_id=item.id) }}" alt="{{ item.title }}">
+                <h3>{{ item.title }}</h3>
+                <p>{{ item.author }}</p>
+            </a>
+        {% endfor %}
+    </div>
+</section>
+{% endblock %}
