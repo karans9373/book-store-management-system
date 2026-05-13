@@ -71,12 +71,15 @@ function renderSessionChip() {
     document.querySelectorAll("[data-admin-link]").forEach((link) => {
         link.hidden = !sessionState.is_admin;
     });
+    document.querySelectorAll("[data-customer-link]").forEach((link) => {
+        link.hidden = sessionState.is_admin;
+    });
     cartCount.textContent = sessionState.cart_count || 0;
     wishlistCount.textContent = sessionState.wishlist_count || 0;
     chip.innerHTML = sessionState.authenticated
-        ? `<strong>${escapeHtml(sessionState.user.name)}</strong><small>${escapeHtml(sessionState.user.phone || sessionState.user.email || sessionState.role)}</small>`
+        ? `<strong>${escapeHtml(sessionState.user.name)}</strong><small>${escapeHtml(sessionState.is_admin ? "Admin access" : (sessionState.user.phone || sessionState.user.email || "Customer"))}</small>`
         : "<strong>Guest</strong><small>Browse the live catalog</small>";
-    authAction.textContent = sessionState.authenticated ? "Logout" : "Sign In";
+    authAction.textContent = sessionState.authenticated ? "Logout" : "Login";
 }
 
 function routePath() {
@@ -120,6 +123,12 @@ function attachGlobalHandlers() {
     });
     const savedTheme = localStorage.getItem("bookverse-theme");
     if (savedTheme) document.documentElement.dataset.theme = savedTheme;
+}
+
+function currentAuthRole() {
+    const params = routeQuery();
+    const requested = (params.get("role") || "customer").toLowerCase();
+    return requested === "admin" ? "admin" : "customer";
 }
 
 function bookCard(book) {
@@ -238,6 +247,22 @@ function ensureAuthView(message) {
                 <p class="lede">${escapeHtml(message)}</p>
                 <div class="action-row">
                     <a class="primary-btn" href="/login" data-link>Open login</a>
+                    <a class="ghost-btn" href="/store" data-link>Back to store</a>
+                </div>
+            </div>
+        </section>
+    `;
+}
+
+function ensureAdminView(message) {
+    appRoot.innerHTML = `
+        <section class="auth-shell">
+            <div class="glass-card form-card auth-card">
+                <span class="eyebrow">Admin only</span>
+                <h1>Use the admin account for this screen.</h1>
+                <p class="lede">${escapeHtml(message)}</p>
+                <div class="action-row">
+                    <a class="primary-btn" href="/login?role=admin" data-link>Admin login</a>
                     <a class="ghost-btn" href="/store" data-link>Back to store</a>
                 </div>
             </div>
@@ -906,14 +931,16 @@ async function renderTrack() {
 }
 
 function authMarkup(active) {
+    const role = currentAuthRole();
     return `
         <section class="auth-shell">
             <div class="glass-card form-card auth-card">
-                <span class="eyebrow">Welcome back</span>
-                <h1>${active === "register" ? "Create your account" : "Sign in to your reading dashboard"}</h1>
+                <span class="eyebrow">${role === "admin" ? "Admin access" : "Welcome back"}</span>
+                <h1>${role === "admin" ? "Sign in to admin operations" : (active === "register" ? "Create your account" : "Sign in to your reading dashboard")}</h1>
                 <div class="auth-switch">
-                    <a href="/login" data-link class="ghost-btn ${active === "login" ? "active-tab" : ""}">Login</a>
-                    <a href="/register" data-link class="ghost-btn ${active === "register" ? "active-tab" : ""}">Sign Up</a>
+                    <a href="/login?role=customer" data-link class="ghost-btn ${active === "login" && role === "customer" ? "active-tab" : ""}">Customer Login</a>
+                    <a href="/login?role=admin" data-link class="ghost-btn ${active === "login" && role === "admin" ? "active-tab" : ""}">Admin Login</a>
+                    <a href="/register?role=customer" data-link class="ghost-btn ${active === "register" ? "active-tab" : ""}">Sign Up</a>
                 </div>
                 <form id="authForm" class="form-card">
                     ${active === "register" ? `
@@ -921,11 +948,18 @@ function authMarkup(active) {
                         <label>Email<input name="email" placeholder="reader@example.com"></label>
                         <label>Phone<input name="phone" placeholder="9876543210"></label>
                     ` : `
-                        <label>Email or Phone<input name="identifier" placeholder="reader@example.com or 9876543210"></label>
+                        <label>${role === "admin" ? "Admin Email" : "Email or Phone"}<input name="identifier" placeholder="${role === "admin" ? "admin@bookverse.ai" : "reader@example.com or 9876543210"}"></label>
                     `}
                     <label>Password<input type="password" name="password" placeholder="password"></label>
-                    <button class="primary-btn" type="submit">${active === "register" ? "Create account" : "Sign in"}</button>
+                    <button class="primary-btn" type="submit">${role === "admin" ? "Open admin dashboard" : (active === "register" ? "Create account" : "Sign in")}</button>
                     <small class="muted-copy">Admin login: admin@bookverse.ai / admin123</small>
+                    <div class="action-row">
+                        ${role === "admin"
+                            ? '<button class="ghost-btn" type="button" id="fillAdminDemo">Use admin demo</button>'
+                            : (active === "register"
+                                ? '<button class="ghost-btn" type="button" id="fillCustomerDemo">Use customer demo</button>'
+                                : '<button class="ghost-btn" type="button" id="fillCustomerDemo">Use customer demo</button>')}
+                    </div>
                 </form>
             </div>
         </section>
@@ -934,9 +968,31 @@ function authMarkup(active) {
 
 async function renderAuth(mode) {
     appRoot.innerHTML = authMarkup(mode);
+    const role = currentAuthRole();
+    const fillCustomer = document.getElementById("fillCustomerDemo");
+    const fillAdmin = document.getElementById("fillAdminDemo");
+    fillCustomer?.addEventListener("click", () => {
+        const form = document.getElementById("authForm");
+        if (mode === "register") {
+            form.querySelector("[name='name']").value = "Demo Customer";
+            form.querySelector("[name='email']").value = "customer@bookverse.ai";
+            form.querySelector("[name='phone']").value = "9876543210";
+        } else {
+            form.querySelector("[name='identifier']").value = "9876543210";
+        }
+        const password = form.querySelector("[name='password']");
+        if (password) password.value = "demo123";
+    });
+    fillAdmin?.addEventListener("click", () => {
+        const form = document.getElementById("authForm");
+        form.querySelector("[name='identifier']").value = "admin@bookverse.ai";
+        const password = form.querySelector("[name='password']");
+        if (password) password.value = "admin123";
+    });
     document.getElementById("authForm").addEventListener("submit", async (event) => {
         event.preventDefault();
         const payload = Object.fromEntries(new FormData(event.currentTarget).entries());
+        payload.role = role;
         try {
             const result = await api(`/api/auth/${mode === "register" ? "register" : "login"}`, { method: "POST", body: JSON.stringify(payload) });
             setFlash(result.message);
@@ -989,6 +1045,25 @@ async function renderAdminDashboard() {
                 `).join("")}
             </section>
             <section class="grid-two section-block">
+                <div class="glass-card info-card">
+                    <span class="eyebrow">Inventory controls</span>
+                    <h3>Manage titles and stock</h3>
+                    <p>Add new books, delete existing uploads, and review live inventory units from one screen.</p>
+                    <div class="action-row">
+                        <a class="primary-btn" href="/admin/inventory" data-link>Open inventory</a>
+                        <a class="ghost-btn" href="/admin/orders" data-link>View orders</a>
+                    </div>
+                </div>
+                <div class="glass-card info-card">
+                    <span class="eyebrow">Order controls</span>
+                    <h3>Print and track customer orders</h3>
+                    <p>Open the orders screen to print invoices, inspect shipping addresses, and review sold stock.</p>
+                    <div class="action-row">
+                        <a class="primary-btn" href="/admin/orders" data-link>Open orders</a>
+                    </div>
+                </div>
+            </section>
+            <section class="grid-two section-block">
                 <div class="glass-card chart-panel">
                     <h3>Popular books</h3>
                     <canvas id="salesChart"></canvas>
@@ -1012,7 +1087,7 @@ async function renderAdminDashboard() {
         drawChart("salesChart", data.sales_chart.labels, data.sales_chart.values, "#ffb703");
         drawChart("visitorChart", data.visitor_chart.labels, data.visitor_chart.values, "#4cc9f0");
     } catch (error) {
-        ensureAuthView(error.message);
+        ensureAdminView(error.message);
     }
 }
 
@@ -1072,7 +1147,7 @@ async function renderAdminInventory() {
             });
         });
     } catch (error) {
-        ensureAuthView(error.message);
+        ensureAdminView(error.message);
     }
 }
 
@@ -1113,7 +1188,7 @@ async function renderAdminOrders() {
             </section>
         `;
     } catch (error) {
-        ensureAuthView(error.message);
+        ensureAdminView(error.message);
     }
 }
 

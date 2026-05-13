@@ -1903,6 +1903,7 @@ def print_order(order_id: int):
 def auth():
     if request.method == "POST":
         mode = request.form.get("auth_mode", "login").strip().lower()
+        role_mode = request.form.get("role_mode", "customer").strip().lower()
         identifier = request.form.get("identifier", "").strip()
         email = request.form.get("email", "").strip().lower()
         password = request.form.get("password", "").strip()
@@ -1910,13 +1911,16 @@ def auth():
         phone = request.form.get("phone", "").strip()
 
         admin_identifier = identifier.lower() if identifier else email
-        if admin_identifier == ADMIN_EMAIL and password == ADMIN_PASSWORD:
-            session["role"] = "admin"
-            session["user_name"] = "Bookverse Admin"
-            session["user_email"] = ADMIN_EMAIL
-            session["user_phone"] = phone or "+91 90000 00000"
-            flash("Admin login successful.")
-            return redirect(url_for("admin_dashboard"))
+        if role_mode == "admin":
+            if admin_identifier == ADMIN_EMAIL and password == ADMIN_PASSWORD:
+                session["role"] = "admin"
+                session["user_name"] = "Bookverse Admin"
+                session["user_email"] = ADMIN_EMAIL
+                session["user_phone"] = phone or "+91 90000 00000"
+                flash("Admin login successful.")
+                return redirect(url_for("admin_dashboard"))
+            flash("Admin credentials are incorrect.")
+            return redirect(url_for("auth", role="admin"))
 
         if mode == "register":
             session["role"] = "customer"
@@ -1926,18 +1930,28 @@ def auth():
             flash("Account created. You can continue with your cart.")
             return complete_post_auth_flow()
 
+        if admin_identifier == ADMIN_EMAIL:
+            flash("Use the admin sign in tab for admin access.")
+            return redirect(url_for("auth", role="admin"))
+
         normalized_identifier = identifier or email or phone
+        if not normalized_identifier:
+            flash("Enter your email or phone number to sign in.")
+            return redirect(url_for("auth"))
         inferred_email = normalized_identifier if "@" in normalized_identifier else session.get("user_email", "")
         inferred_phone = normalized_identifier if normalized_identifier.isdigit() else phone or session.get("user_phone", "")
         session["role"] = "customer"
-        session["user_name"] = session.get("user_name") or "Reader"
+        session["user_name"] = session.get("user_name") or name or "Reader"
         session["user_email"] = inferred_email
         session["user_phone"] = inferred_phone
         flash("Signed in successfully.")
         return complete_post_auth_flow()
 
     mode = "register" if request.path.endswith("register") else "login"
-    return render_template("auth.html", mode=mode, admin_email=ADMIN_EMAIL, admin_password=ADMIN_PASSWORD)
+    role_mode = request.args.get("role", "customer").strip().lower()
+    if role_mode not in {"customer", "admin"}:
+        role_mode = "customer"
+    return render_template("auth.html", mode=mode, role_mode=role_mode, admin_email=ADMIN_EMAIL, admin_password=ADMIN_PASSWORD)
 
 
 @app.route("/logout")
@@ -2128,25 +2142,34 @@ def api_session():
 @app.post("/api/auth/login")
 def api_login():
     payload = request.get_json(silent=True) or {}
+    role_mode = (payload.get("role") or "customer").strip().lower()
     identifier = (payload.get("identifier") or "").strip()
     email = (payload.get("email") or "").strip().lower()
     password = (payload.get("password") or "").strip()
     phone = (payload.get("phone") or "").strip()
+    name = (payload.get("name") or "Reader").strip() or "Reader"
 
     admin_identifier = identifier.lower() if identifier else email
-    if admin_identifier == ADMIN_EMAIL and password == ADMIN_PASSWORD:
-        session["role"] = "admin"
-        session["user_name"] = "Bookverse Admin"
-        session["user_email"] = ADMIN_EMAIL
-        session["user_phone"] = phone or "+91 90000 00000"
-        session.modified = True
-        return api_response({"ok": True, "message": "Admin login successful.", "session": session_payload()})
+    if role_mode == "admin":
+        if admin_identifier == ADMIN_EMAIL and password == ADMIN_PASSWORD:
+            session["role"] = "admin"
+            session["user_name"] = "Bookverse Admin"
+            session["user_email"] = ADMIN_EMAIL
+            session["user_phone"] = phone or "+91 90000 00000"
+            session.modified = True
+            return api_response({"ok": True, "message": "Admin login successful.", "session": session_payload()})
+        return api_response({"ok": False, "message": "Admin credentials are incorrect."}, 401)
+
+    if admin_identifier == ADMIN_EMAIL:
+        return api_response({"ok": False, "message": "Use the admin sign in form for admin access."}, 403)
 
     normalized_identifier = identifier or email or phone
+    if not normalized_identifier:
+        return api_response({"ok": False, "message": "Enter your email or phone number."}, 400)
     inferred_email = normalized_identifier if "@" in normalized_identifier else session.get("user_email", "")
     inferred_phone = normalized_identifier if normalized_identifier.isdigit() else phone or session.get("user_phone", "")
     session["role"] = "customer"
-    session["user_name"] = session.get("user_name") or "Reader"
+    session["user_name"] = session.get("user_name") or name
     session["user_email"] = inferred_email
     session["user_phone"] = inferred_phone
     session.modified = True
