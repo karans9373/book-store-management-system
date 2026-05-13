@@ -5,3 +5,8 @@ services:
     plan: free
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn app:app
+    envVars:
+      - key: CROSS_SITE_SESSION
+        value: "1"
+      - key: FRONTEND_ORIGINS
+        value: https://your-netlify-site.netlify.app

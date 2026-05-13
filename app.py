@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import random
 import re
 import sqlite3
@@ -24,9 +25,20 @@ APP_SECRET = "bookverse-ai-premium-secret"
 ADMIN_EMAIL = "admin@bookverse.ai"
 ADMIN_PASSWORD = "admin123"
 CATALOG_TARGET = 520
+FRONTEND_ORIGINS = [
+    origin.strip()
+    for origin in os.environ.get(
+        "FRONTEND_ORIGINS",
+        "http://127.0.0.1:5500,http://localhost:5500,http://127.0.0.1:3000,http://localhost:3000",
+    ).split(",")
+    if origin.strip()
+]
 
 app = Flask(__name__)
 app.secret_key = APP_SECRET
+if os.environ.get("CROSS_SITE_SESSION", "0") == "1":
+    app.config["SESSION_COOKIE_SAMESITE"] = "None"
+    app.config["SESSION_COOKIE_SECURE"] = True
 
 
 MANUAL_BOOKS = [
@@ -1274,6 +1286,175 @@ def inject_globals():
     }
 
 
+def api_response(payload, status: int = 200):
+    return jsonify(payload), status
+
+
+def current_origin() -> str:
+    return request.headers.get("Origin", "").rstrip("/")
+
+
+def origin_allowed(origin: str) -> bool:
+    if not origin:
+        return False
+    if origin in FRONTEND_ORIGINS:
+        return True
+    if origin.startswith("http://localhost:") or origin.startswith("http://127.0.0.1:"):
+        return True
+    return origin.endswith(".netlify.app")
+
+
+def absolute_url(path: str) -> str:
+    if path.startswith("http://") or path.startswith("https://"):
+        return path
+    return f"{request.host_url.rstrip('/')}{path}"
+
+
+def cover_api_src(book) -> str:
+    return absolute_url(book["cover_url"] or url_for("cover_art", book_id=book["id"]))
+
+
+def current_wishlist_owner() -> str:
+    return session.get("user_name") or "Aanya"
+
+
+def session_payload() -> dict:
+    items, _total = cart_books()
+    return {
+        "authenticated": is_authenticated_customer() or session.get("role") == "admin",
+        "role": session.get("role", "guest"),
+        "user": {
+            "name": session.get("user_name", "Guest"),
+            "email": session.get("user_email", ""),
+            "phone": session.get("user_phone", ""),
+        },
+        "cart_count": sum(item["qty"] for item in items),
+        "wishlist_count": query_db(
+            "SELECT COUNT(*) AS total FROM wishlist WHERE user_name = ?",
+            (current_wishlist_owner(),),
+            one=True,
+        )["total"],
+        "my_orders_count": len(session.get("recent_orders", [])),
+        "is_admin": session.get("role") == "admin",
+    }
+
+
+def serialize_book(book, detail: bool = False) -> dict:
+    payload = {
+        "id": book["id"],
+        "title": book["title"],
+        "author": book["author"],
+        "genre": book["genre"],
+        "price": book["price"],
+        "rating": book["rating"],
+        "language": book["language"],
+        "pages": book["pages"],
+        "stock": book["stock"],
+        "sold_count": book["sold_count"],
+        "cover": cover_api_src(book),
+        "description": book["description"],
+        "summary": book["summary"],
+        "mood_tags": [tag.strip() for tag in book["mood_tags"].split(",") if tag.strip()],
+        "excerpt": book["excerpt"],
+        "preview_ready": bool(book["text_url"] or book["title"] in MANUAL_READER_CONTENT),
+        "featured": bool(book["featured"]),
+        "new_arrival": bool(book["new_arrival"]),
+        "best_seller": bool(book["best_seller"]),
+        "trending": bool(book["trending"]),
+    }
+    if detail:
+        payload["subjects"] = [segment.strip() for segment in book["summary"].split(",") if segment.strip()]
+    return payload
+
+
+def serialize_review(review) -> dict:
+    return {
+        "id": review["id"],
+        "reviewer": review["reviewer"],
+        "rating": review["rating"],
+        "comment": review["comment"],
+    }
+
+
+def serialize_order_item(item) -> dict:
+    return {
+        "id": item["id"],
+        "book_id": item["book_id"],
+        "title": item["title"],
+        "author": item["author"],
+        "qty": item["qty"],
+        "price": item["price"],
+        "line_total": item["line_total"],
+        "cover": absolute_url(item["cover_url"]),
+    }
+
+
+def serialize_order(order, include_items: bool = False) -> dict:
+    payload = {
+        "id": order["id"],
+        "order_number": order["order_number"],
+        "tracking_number": order["tracking_number"],
+        "customer_name": order["customer_name"],
+        "email": order["email"],
+        "phone": order["phone"],
+        "address": order["address"],
+        "city": order["city"],
+        "state": order["state"],
+        "pincode": order["pincode"],
+        "items_count": order["items_count"],
+        "subtotal": order["subtotal"],
+        "discount": order["discount"],
+        "total": order["total"],
+        "status": infer_order_status(order["placed_on"], order["status"]),
+        "payment_status": order["payment_status"],
+        "placed_on": order["placed_on"],
+        "expected_delivery": order["expected_delivery"],
+        "steps": tracking_steps(order),
+        "print_url": absolute_url(url_for("print_order", order_id=order["id"])),
+    }
+    if include_items:
+        payload["items"] = [serialize_order_item(item) for item in order_items(order["id"])]
+    return payload
+
+
+def serialize_cart():
+    items, total = cart_books()
+    return {
+        "items": [
+            {
+                "qty": item["qty"],
+                "subtotal": item["subtotal"],
+                "book": serialize_book(item["book"]),
+            }
+            for item in items
+        ],
+        "total": total,
+        "count": sum(item["qty"] for item in items),
+    }
+
+
+def ensure_api_customer():
+    if is_authenticated_customer():
+        return None
+    return api_response({"ok": False, "message": "Sign in to continue.", "login_required": True}, 401)
+
+
+def ensure_api_admin():
+    if session.get("role") == "admin":
+        return None
+    return api_response({"ok": False, "message": "Admin access required."}, 403)
+
+
+def serialize_booksoul_match(match: dict) -> dict:
+    return {
+        "reader": dict(match["reader"]),
+        "partner": dict(match["partner"]),
+        "compatibility": match["compatibility"],
+        "bond": match["bond"],
+        "spark_title": match["spark_title"],
+    }
+
+
 @app.route("/")
 def home():
     books = query_db("SELECT * FROM books ORDER BY stock = 0 ASC, rating DESC, sold_count DESC LIMIT 48")
@@ -1914,11 +2095,492 @@ def store_assistant():
             "rating": book["rating"],
             "stock": book["stock"],
             "summary": book["summary"][:180],
-            "cover": url_for("cover_art", book_id=book["id"]),
+            "cover": cover_api_src(book),
         }
         for book in top_books
     ]
     return jsonify({"message": message, "books": payload})
+
+
+@app.after_request
+def apply_api_cors(response):
+    if request.path.startswith("/api/"):
+        origin = current_origin()
+        if origin_allowed(origin):
+            response.headers["Access-Control-Allow-Origin"] = origin
+            response.headers["Access-Control-Allow-Credentials"] = "true"
+            response.headers["Access-Control-Allow-Headers"] = "Content-Type, X-Requested-With"
+            response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+            response.headers["Vary"] = "Origin"
+    return response
+
+
+@app.route("/api/<path:_path>", methods=["OPTIONS"])
+def api_options(_path: str):
+    return ("", 204)
+
+
+@app.get("/api/session")
+def api_session():
+    return api_response(session_payload())
+
+
+@app.post("/api/auth/login")
+def api_login():
+    payload = request.get_json(silent=True) or {}
+    identifier = (payload.get("identifier") or "").strip()
+    email = (payload.get("email") or "").strip().lower()
+    password = (payload.get("password") or "").strip()
+    phone = (payload.get("phone") or "").strip()
+
+    admin_identifier = identifier.lower() if identifier else email
+    if admin_identifier == ADMIN_EMAIL and password == ADMIN_PASSWORD:
+        session["role"] = "admin"
+        session["user_name"] = "Bookverse Admin"
+        session["user_email"] = ADMIN_EMAIL
+        session["user_phone"] = phone or "+91 90000 00000"
+        session.modified = True
+        return api_response({"ok": True, "message": "Admin login successful.", "session": session_payload()})
+
+    normalized_identifier = identifier or email or phone
+    inferred_email = normalized_identifier if "@" in normalized_identifier else session.get("user_email", "")
+    inferred_phone = normalized_identifier if normalized_identifier.isdigit() else phone or session.get("user_phone", "")
+    session["role"] = "customer"
+    session["user_name"] = session.get("user_name") or "Reader"
+    session["user_email"] = inferred_email
+    session["user_phone"] = inferred_phone
+    session.modified = True
+    return api_response({"ok": True, "message": "Signed in successfully.", "session": session_payload()})
+
+
+@app.post("/api/auth/register")
+def api_register():
+    payload = request.get_json(silent=True) or {}
+    session["role"] = "customer"
+    session["user_name"] = (payload.get("name") or "Reader").strip() or "Reader"
+    session["user_email"] = (payload.get("email") or "").strip().lower()
+    session["user_phone"] = (payload.get("phone") or "").strip()
+    session.modified = True
+    return api_response({"ok": True, "message": "Account created.", "session": session_payload()})
+
+
+@app.post("/api/auth/logout")
+def api_logout():
+    session.clear()
+    return api_response({"ok": True, "message": "Signed out."})
+
+
+@app.get("/api/home")
+def api_home():
+    books = query_db("SELECT * FROM books ORDER BY stock = 0 ASC, rating DESC, sold_count DESC LIMIT 48")
+    featured = query_db("SELECT * FROM books WHERE featured = 1 AND stock > 0 ORDER BY rating DESC LIMIT 4")
+    if not featured:
+        featured = books[:4]
+    trending = query_db("SELECT * FROM books WHERE stock > 0 ORDER BY sold_count DESC, trending DESC, rating DESC LIMIT 8")
+    arrivals = query_db("SELECT * FROM books WHERE stock > 0 ORDER BY id DESC LIMIT 8")
+    best_sellers = query_db("SELECT * FROM books WHERE stock > 0 ORDER BY sold_count DESC, rating DESC LIMIT 4")
+    authors = query_db("SELECT author, AVG(rating) AS rating, COUNT(*) AS titles FROM books GROUP BY author ORDER BY titles DESC, rating DESC LIMIT 6")
+    genres = query_db("SELECT genre, COUNT(*) AS count FROM books GROUP BY genre ORDER BY count DESC LIMIT 8")
+    rec_groups = {}
+    for label, group in recommendation_groups(books).items():
+        rec_groups[label] = [serialize_book(book) for book in group[:4]]
+    return api_response(
+        {
+            "featured": [serialize_book(book) for book in featured],
+            "trending": [serialize_book(book) for book in trending],
+            "arrivals": [serialize_book(book) for book in arrivals],
+            "best_sellers": [serialize_book(book) for book in best_sellers],
+            "authors": [{"author": row["author"], "rating": round(row["rating"] or 0, 1), "titles": row["titles"]} for row in authors],
+            "genres": [{"genre": row["genre"], "count": row["count"]} for row in genres],
+            "catalog_size": query_db("SELECT COUNT(*) AS total FROM books", one=True)["total"],
+            "recommendation_groups": rec_groups,
+            "matches": [serialize_booksoul_match(match) for match in booksoul_matches()[:3]],
+        }
+    )
+
+
+@app.get("/api/store")
+def api_store():
+    books = filter_books(request.args)
+    facets = {
+        "genres": [row["genre"] for row in query_db("SELECT DISTINCT genre FROM books ORDER BY genre")],
+        "authors": [row["author"] for row in query_db("SELECT DISTINCT author FROM books ORDER BY author LIMIT 200")],
+        "languages": [row["language"] for row in query_db("SELECT DISTINCT language FROM books ORDER BY language")],
+    }
+    counts = {
+        "titles": query_db("SELECT COUNT(*) AS total FROM books", one=True)["total"],
+        "inventory": query_db("SELECT COALESCE(SUM(stock), 0) AS total FROM books", one=True)["total"],
+        "out_of_stock": query_db("SELECT COUNT(*) AS total FROM books WHERE stock = 0", one=True)["total"],
+    }
+    return api_response({"books": [serialize_book(book) for book in books], "facets": facets, "counts": counts})
+
+
+@app.get("/api/books/<int:book_id>")
+def api_book_detail(book_id: int):
+    book = get_book(book_id)
+    if not book:
+        return api_response({"ok": False, "message": "Book not found."}, 404)
+    reviews = query_db("SELECT * FROM reviews WHERE book_id = ? ORDER BY id DESC", (book_id,))
+    related = query_db(
+        "SELECT * FROM books WHERE genre = ? AND id != ? ORDER BY rating DESC, sold_count DESC LIMIT 4",
+        (book["genre"], book_id),
+    )
+    author_books = query_db("SELECT * FROM books WHERE author = ? ORDER BY rating DESC LIMIT 4", (book["author"],))
+    return api_response(
+        {
+            "book": serialize_book(book, detail=True),
+            "reviews": [serialize_review(review) for review in reviews],
+            "related": [serialize_book(row) for row in related],
+            "author_books": [serialize_book(row) for row in author_books],
+        }
+    )
+
+
+@app.get("/api/books/<int:book_id>/reader")
+def api_book_reader(book_id: int):
+    book = get_book(book_id)
+    if not book:
+        return api_response({"ok": False, "message": "Book not found."}, 404)
+    return api_response({"book": serialize_book(book, detail=True), "pages": reader_pages(book)})
+
+
+@app.get("/api/genres")
+def api_genres():
+    groups = query_db(
+        "SELECT genre, COUNT(*) AS total, AVG(rating) AS avg_rating, MIN(price) AS min_price FROM books GROUP BY genre ORDER BY total DESC"
+    )
+    return api_response(
+        {
+            "genres": [
+                {
+                    "genre": row["genre"],
+                    "total": row["total"],
+                    "avg_rating": round(row["avg_rating"] or 0, 1),
+                    "min_price": row["min_price"],
+                }
+                for row in groups
+            ]
+        }
+    )
+
+
+@app.get("/api/authors")
+def api_authors():
+    writers = query_db(
+        "SELECT author, AVG(rating) AS rating, COUNT(*) AS total, SUM(stock) AS stock FROM books GROUP BY author ORDER BY total DESC, rating DESC LIMIT 60"
+    )
+    return api_response(
+        {
+            "authors": [
+                {
+                    "author": row["author"],
+                    "rating": round(row["rating"] or 0, 1),
+                    "total": row["total"],
+                    "stock": row["stock"] or 0,
+                    "avatar": absolute_url(url_for("author_avatar", name=slugify(row["author"]))),
+                }
+                for row in writers
+            ]
+        }
+    )
+
+
+@app.get("/api/community")
+def api_community():
+    top_readers = query_db("SELECT * FROM users ORDER BY streak DESC")
+    challenges = [
+        {"name": "30-Day Streak Sprint", "participants": 284, "progress": 72},
+        {"name": "Read 12 Books in 12 Weeks", "participants": 131, "progress": 54},
+        {"name": "Thriller After Dark", "participants": 89, "progress": 81},
+    ]
+    discussions = [
+        {"topic": "Best plot twists that still feel fair", "replies": 43, "club": "Midnight Margins"},
+        {"topic": "What is your exam revision stack this month?", "replies": 28, "club": "Exam Legends"},
+        {"topic": "Which public-domain classic actually holds up?", "replies": 36, "club": "Founders & Folios"},
+    ]
+    return api_response(
+        {
+            "top_readers": [dict(row) for row in top_readers],
+            "challenges": challenges,
+            "discussions": discussions,
+            "matches": [serialize_booksoul_match(match) for match in booksoul_matches()],
+        }
+    )
+
+
+@app.get("/api/clubs")
+def api_clubs():
+    return api_response({"clubs": [dict(row) for row in query_db("SELECT * FROM clubs ORDER BY id")]})
+
+
+@app.get("/api/wishlist")
+def api_wishlist():
+    guard = ensure_api_customer()
+    if guard:
+        return guard
+    entries = query_db(
+        """
+        SELECT wishlist.id AS wishlist_id, books.*
+        FROM wishlist
+        JOIN books ON books.id = wishlist.book_id
+        WHERE wishlist.user_name = ?
+        ORDER BY wishlist.id DESC
+        """,
+        (current_wishlist_owner(),),
+    )
+    return api_response({"entries": [{"wishlist_id": row["wishlist_id"], "book": serialize_book(row)} for row in entries]})
+
+
+@app.post("/api/wishlist/add/<int:book_id>")
+def api_add_wishlist(book_id: int):
+    guard = ensure_api_customer()
+    if guard:
+        return guard
+    execute_db("INSERT INTO wishlist (user_name, book_id) VALUES (?, ?)", (current_wishlist_owner(), book_id))
+    return api_response({"ok": True, "message": "Added to wishlist."})
+
+
+@app.get("/api/cart")
+def api_cart():
+    guard = ensure_api_customer()
+    if guard:
+        return guard
+    blind_date = query_db(
+        "SELECT * FROM books WHERE genre IN ('Thriller', 'Novel', 'Fiction', 'Classics') AND stock > 0 ORDER BY RANDOM() LIMIT 1",
+        one=True,
+    )
+    payload = serialize_cart()
+    payload["blind_date"] = serialize_book(blind_date) if blind_date else None
+    return api_response(payload)
+
+
+@app.post("/api/cart/remove/<int:book_id>")
+def api_remove_cart(book_id: int):
+    guard = ensure_api_customer()
+    if guard:
+        return guard
+    cart = get_cart()
+    cart.pop(str(book_id), None)
+    session.modified = True
+    return api_response({"ok": True, "message": "Removed from cart.", "cart": serialize_cart()})
+
+
+@app.post("/api/checkout")
+def api_checkout():
+    guard = ensure_api_customer()
+    if guard:
+        return guard
+    items, total = cart_books()
+    if not items:
+        return api_response({"ok": False, "message": "Your cart is empty."}, 400)
+
+    payload_json = request.get_json(silent=True) or {}
+    form = {key: str(payload_json.get(key, "")).strip() for key in ["name", "email", "phone", "address", "city", "state", "pincode", "coupon"]}
+    payload = build_order_payload(items, form)
+    if not payload["address"] or not payload["phone"] or not payload["city"] or not payload["pincode"]:
+        return api_response({"ok": False, "message": "Fill shipping address, phone, city, state, and pincode."}, 400)
+
+    db = get_db()
+    db.execute("BEGIN")
+    try:
+        for item in items:
+            latest = db.execute("SELECT stock FROM books WHERE id = ?", (item["book"]["id"],)).fetchone()
+            if not latest or latest["stock"] < item["qty"]:
+                raise ValueError(f"{item['book']['title']} is no longer available in the requested quantity.")
+        db.execute(
+            """
+            INSERT INTO orders (
+                order_number, tracking_number, customer_name, email, phone, address, city, state, pincode,
+                items_json, items_count, subtotal, discount, total, status, payment_status, placed_on, expected_delivery
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                payload["order_number"],
+                payload["tracking_number"],
+                payload["customer_name"],
+                payload["email"],
+                payload["phone"],
+                payload["address"],
+                payload["city"],
+                payload["state"],
+                payload["pincode"],
+                payload["items_json"],
+                payload["items_count"],
+                payload["subtotal"],
+                payload["discount"],
+                payload["total"],
+                payload["status"],
+                payload["payment_status"],
+                payload["placed_on"],
+                payload["expected_delivery"],
+            ),
+        )
+        order_id = db.execute("SELECT last_insert_rowid()").fetchone()[0]
+        for item in items:
+            book = item["book"]
+            db.execute(
+                """
+                INSERT INTO order_items (order_id, book_id, title, author, cover_url, price, qty, line_total)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    order_id,
+                    book["id"],
+                    book["title"],
+                    book["author"],
+                    book["cover_url"] or f"/cover/{book['id']}.svg",
+                    book["price"],
+                    item["qty"],
+                    item["subtotal"],
+                ),
+            )
+            db.execute("UPDATE books SET stock = stock - ?, sold_count = sold_count + ? WHERE id = ?", (item["qty"], item["qty"], book["id"]))
+        db.commit()
+    except Exception as exc:  # noqa: BLE001
+        db.rollback()
+        return api_response({"ok": False, "message": str(exc)}, 400)
+
+    session["cart"] = {}
+    session.setdefault("recent_orders", []).append(order_id)
+    session["recent_orders"] = session["recent_orders"][-20:]
+    session["last_order_number"] = payload["order_number"]
+    session["user_email"] = payload["email"]
+    session["user_name"] = payload["customer_name"]
+    session["role"] = session.get("role", "customer")
+    session.modified = True
+    order = get_order(order_id)
+    return api_response({"ok": True, "message": "Payment successful. Order placed.", "order": serialize_order(order, include_items=True)})
+
+
+@app.get("/api/orders/mine")
+def api_orders_mine():
+    guard = ensure_api_customer()
+    if guard:
+        return guard
+    rows = []
+    for order_id in session.get("recent_orders", []):
+        order = get_order(order_id)
+        if order:
+            rows.append(serialize_order(order, include_items=True))
+    return api_response({"orders": rows})
+
+
+@app.get("/api/orders/track/<order_number>")
+def api_track_order(order_number: str):
+    order = get_order_by_number(order_number)
+    if not order:
+        return api_response({"ok": False, "message": "Order not found."}, 404)
+    return api_response({"order": serialize_order(order, include_items=True)})
+
+
+@app.get("/api/admin/dashboard")
+def api_admin_dashboard():
+    guard = ensure_api_admin()
+    if guard:
+        return guard
+    stats = analytics_summary()
+    books = query_db("SELECT * FROM books ORDER BY stock ASC, sold_count DESC LIMIT 8")
+    recent_orders = query_db("SELECT * FROM orders ORDER BY placed_on DESC, id DESC LIMIT 6")
+    chart_books = query_db("SELECT title, sold_count FROM books ORDER BY sold_count DESC, rating DESC LIMIT 6")
+    visitor_series = query_db(
+        """
+        SELECT viewed_on, COUNT(DISTINCT visitor_key) AS total
+        FROM visitor_log
+        GROUP BY viewed_on
+        ORDER BY viewed_on DESC
+        LIMIT 7
+        """
+    )
+    return api_response(
+        {
+            "stats": stats,
+            "low_stock": [serialize_book(book) for book in books if book["stock"] < 5],
+            "recent_orders": [serialize_order(order) for order in recent_orders],
+            "sales_chart": {
+                "labels": [row["title"][:24] for row in chart_books],
+                "values": [row["sold_count"] for row in chart_books],
+            },
+            "visitor_chart": {
+                "labels": [row["viewed_on"] for row in reversed(visitor_series)],
+                "values": [row["total"] for row in reversed(visitor_series)],
+            },
+        }
+    )
+
+
+@app.route("/api/admin/inventory", methods=["GET", "POST"])
+def api_admin_inventory():
+    guard = ensure_api_admin()
+    if guard:
+        return guard
+    if request.method == "POST":
+        body = request.get_json(silent=True) or {}
+        payload = {
+            "source_id": f"manual-{slugify(body.get('title', 'manual-book'))}",
+            "source_name": "manual",
+            "title": str(body.get("title", "")).strip(),
+            "author": str(body.get("author", "")).strip() or "Unknown Author",
+            "genre": str(body.get("genre", "")).strip() or "Fiction",
+            "language": str(body.get("language", "")).strip() or "English",
+            "description": str(body.get("description", "")).strip(),
+            "summary": str(body.get("summary", "")).strip(),
+            "mood_tags": str(body.get("mood_tags", "weekend,fiction")).strip(),
+            "excerpt": str(body.get("excerpt", "")).strip(),
+            "cover_palette": str(body.get("cover_palette", "#111827,#334155,#cbd5e1")).strip(),
+            "cover_url": str(body.get("cover_url", "")).strip(),
+            "text_url": str(body.get("text_url", "")).strip(),
+            "price": int(body.get("price") or 0),
+            "rating": float(body.get("rating") or 4.2),
+            "pages": int(body.get("pages") or 10),
+            "stock": int(body.get("stock") or 10),
+            "featured": 1 if body.get("featured") else 0,
+            "new_arrival": 1 if body.get("new_arrival") else 0,
+            "best_seller": 1 if body.get("best_seller") else 0,
+            "trending": 1 if body.get("trending") else 0,
+        }
+        get_db().execute(
+            """
+            INSERT INTO books (
+                source_id, source_name, title, author, genre, price, rating, language, pages, stock, sold_count,
+                cover_palette, cover_url, description, summary, mood_tags, excerpt, text_url,
+                featured, new_arrival, best_seller, trending
+            ) VALUES (
+                :source_id, :source_name, :title, :author, :genre, :price, :rating, :language, :pages, :stock, 0,
+                :cover_palette, :cover_url, :description, :summary, :mood_tags, :excerpt, :text_url,
+                :featured, :new_arrival, :best_seller, :trending
+            )
+            """,
+            payload,
+        )
+        get_db().commit()
+        return api_response({"ok": True, "message": "Inventory updated."})
+
+    books = query_db("SELECT * FROM books ORDER BY id DESC LIMIT 120")
+    return api_response(
+        {
+            "books": [serialize_book(book) for book in books],
+            "total_titles": query_db("SELECT COUNT(*) AS total FROM books", one=True)["total"],
+            "inventory_units": query_db("SELECT COALESCE(SUM(stock), 0) AS total FROM books", one=True)["total"],
+        }
+    )
+
+
+@app.post("/api/admin/inventory/delete/<int:book_id>")
+def api_admin_delete_book(book_id: int):
+    guard = ensure_api_admin()
+    if guard:
+        return guard
+    execute_db("DELETE FROM books WHERE id = ?", (book_id,))
+    return api_response({"ok": True, "message": "Book removed."})
+
+
+@app.get("/api/admin/orders")
+def api_admin_orders():
+    guard = ensure_api_admin()
+    if guard:
+        return guard
+    order_rows = query_db("SELECT * FROM orders ORDER BY placed_on DESC, id DESC LIMIT 80")
+    return api_response({"orders": [serialize_order(order, include_items=True) for order in order_rows]})
 
 
 @app.errorhandler(404)
