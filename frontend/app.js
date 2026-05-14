@@ -1,5 +1,8 @@
 const API_BASE_URL = (window.BOOKVERSE_CONFIG?.apiBaseUrl || "http://127.0.0.1:5000").replace(/\/$/, "");
 const appRoot = document.getElementById("app");
+const loaderRoot = document.getElementById("appLoader");
+const loaderTitle = document.getElementById("loaderTitle");
+const loaderMessage = document.getElementById("loaderMessage");
 let sessionState = {
     authenticated: false,
     role: "guest",
@@ -8,6 +11,7 @@ let sessionState = {
     wishlist_count: 0,
     is_admin: false
 };
+let pendingRequests = 0;
 
 function escapeHtml(value = "") {
     return String(value)
@@ -33,32 +37,66 @@ function setFlash(message, kind = "info") {
     setTimeout(() => node.remove(), 4000);
 }
 
+function showLoader(title = "Opening BOOKVERSE AI", message = "Waking up the bookstore and fetching your next screen.") {
+    if (!loaderRoot) return;
+    loaderRoot.classList.add("visible");
+    loaderRoot.setAttribute("aria-hidden", "false");
+    if (loaderTitle) loaderTitle.textContent = title;
+    if (loaderMessage) loaderMessage.textContent = message;
+}
+
+function hideLoader() {
+    if (!loaderRoot) return;
+    loaderRoot.classList.remove("visible");
+    loaderRoot.setAttribute("aria-hidden", "true");
+}
+
 async function api(path, options = {}) {
-    const response = await fetch(`${API_BASE_URL}${path}`, {
-        credentials: "include",
-        headers: {
-            "Content-Type": "application/json",
-            ...(options.headers || {})
-        },
-        ...options
-    });
-    let data = {};
+    pendingRequests += 1;
+    const loaderConfig = options.loader || {};
+    const fetchOptions = { ...options };
+    delete fetchOptions.loader;
+    if (loaderConfig.show !== false) {
+        showLoader(
+            loaderConfig.title || "Loading bookstore",
+            loaderConfig.message || "Fetching live data from the catalog and order system."
+        );
+    }
     try {
-        data = await response.json();
-    } catch (_error) {
-        data = {};
+        const response = await fetch(`${API_BASE_URL}${path}`, {
+            credentials: "include",
+            headers: {
+                "Content-Type": "application/json",
+                ...(fetchOptions.headers || {})
+            },
+            ...fetchOptions
+        });
+        let data = {};
+        try {
+            data = await response.json();
+        } catch (_error) {
+            data = {};
+        }
+        if (!response.ok) {
+            const error = new Error(data.message || "Request failed.");
+            error.status = response.status;
+            error.payload = data;
+            throw error;
+        }
+        return data;
+    } finally {
+        pendingRequests = Math.max(0, pendingRequests - 1);
+        if (pendingRequests === 0) hideLoader();
     }
-    if (!response.ok) {
-        const error = new Error(data.message || "Request failed.");
-        error.status = response.status;
-        error.payload = data;
-        throw error;
-    }
-    return data;
 }
 
 async function refreshSession() {
-    sessionState = await api("/api/session");
+    sessionState = await api("/api/session", {
+        loader: {
+            title: "Checking your session",
+            message: "Syncing cart, account, and storefront state."
+        }
+    });
     renderSessionChip();
     return sessionState;
 }
@@ -106,7 +144,13 @@ function attachGlobalHandlers() {
     window.addEventListener("popstate", renderRoute);
     document.getElementById("authAction").addEventListener("click", async () => {
         if (sessionState.authenticated) {
-            await api("/api/auth/logout", { method: "POST" });
+            await api("/api/auth/logout", {
+                method: "POST",
+                loader: {
+                    title: "Signing you out",
+                    message: "Closing your current session and refreshing the storefront."
+                }
+            });
             setFlash("Signed out.");
             await refreshSession();
             navigate("/");
@@ -133,9 +177,11 @@ function currentAuthRole() {
 
 function bookCard(book) {
     return `
-        <article class="book-card glass-card tall">
-            <img src="${book.cover}" alt="${escapeHtml(book.title)}">
-            <div>
+        <article class="book-card glass-card tall premium-card">
+            <div class="book-cover-wrap">
+                <img src="${book.cover}" alt="${escapeHtml(book.title)}">
+            </div>
+            <div class="book-card-copy">
                 <div class="tag-row">
                     <span class="tag">${escapeHtml(book.genre)}</span>
                     <span class="tag">${escapeHtml(book.language)}</span>
@@ -152,10 +198,10 @@ function bookCard(book) {
                 <div class="price-row">
                     <strong>${formatCurrency(book.price)}</strong>
                 </div>
-                <div class="action-row stacked-mobile">
-                    <a class="ghost-btn" href="/book/${book.id}" data-link>Preview</a>
-                    <a class="ghost-btn" href="/reader/${book.id}" data-link>Read 10 pages</a>
-                    <button class="ghost-btn" type="button" data-wishlist="${book.id}">Wishlist</button>
+                <div class="action-row stacked-mobile book-card-actions">
+                    <a class="ghost-btn" href="/book/${book.id}" data-link>View details</a>
+                    <a class="ghost-btn" href="/reader/${book.id}" data-link>Read preview</a>
+                    <button class="ghost-btn" type="button" data-wishlist="${book.id}">Save</button>
                     <button class="primary-btn" type="button" data-cart="${book.id}" ${book.stock < 1 ? "disabled" : ""}>Add to cart</button>
                 </div>
             </div>
@@ -165,14 +211,23 @@ function bookCard(book) {
 
 function compactBookRow(book) {
     return `
-        <a class="book-inline glass-card" href="/book/${book.id}" data-link>
-            <img src="${book.cover}" alt="${escapeHtml(book.title)}">
-            <div>
-                <strong>${escapeHtml(book.title)}</strong>
-                <span>${escapeHtml(book.author)}</span>
-                <p>${escapeHtml(book.summary)}</p>
+        <article class="book-inline glass-card">
+            <a class="book-inline-cover" href="/book/${book.id}" data-link>
+                <img src="${book.cover}" alt="${escapeHtml(book.title)}">
+            </a>
+            <div class="book-inline-copy">
+                <a class="book-inline-main" href="/book/${book.id}" data-link>
+                    <strong>${escapeHtml(book.title)}</strong>
+                    <span>${escapeHtml(book.author)}</span>
+                    <p>${escapeHtml(book.summary)}</p>
+                </a>
+                <div class="book-inline-actions">
+                    <a class="ghost-btn" href="/book/${book.id}" data-link>Open book</a>
+                    <a class="ghost-btn" href="/reader/${book.id}" data-link>${book.preview_ready ? "Preview" : "View preview"}</a>
+                    <button class="primary-btn" type="button" data-cart="${book.id}" ${book.stock < 1 ? "disabled" : ""}>Add to cart</button>
+                </div>
             </div>
-        </a>
+        </article>
     `;
 }
 
@@ -273,36 +328,43 @@ function ensureAdminView(message) {
 async function renderHome() {
     const data = await api("/api/home");
     appRoot.innerHTML = `
-        <section class="hero">
-            <div>
-                <span class="eyebrow">Premium bookstore</span>
-                <h1>Read, discover, and buy books through one polished storefront.</h1>
-                <p class="lede">BOOKVERSE AI pairs a premium catalog with real-reader previews, smart suggestions, book clubs, and operational order tracking.</p>
-                <div class="hero-metrics">
-                    <span class="tag">${data.catalog_size} titles live</span>
-                    <span class="tag">${data.trending.length} trending now</span>
-                    <span class="tag">${data.best_sellers.length} bestseller picks</span>
-                </div>
-                <div class="hero-actions">
-                    <a class="primary-btn" href="/store" data-link>Browse store</a>
-                    <a class="ghost-btn" href="/community" data-link>See community</a>
-                </div>
+        <section class="immersive-hero glass-card">
+            <div class="hero-media">
+                <video class="hero-video" autoplay muted loop playsinline poster="./assets/bookstore-hero-poster.jpg">
+                    <source src="./assets/bookstore-hero.mp4" type="video/mp4">
+                </video>
+                <div class="hero-overlay"></div>
+                <div class="hero-gradient"></div>
             </div>
-            <div class="hero-stage">
-                <div class="bookshelf glass-card">
-                    ${data.featured.map((book, index) => `<div class="floating-book" style="--delay:${index}"><img src="${book.cover}" alt="${escapeHtml(book.title)}"></div>`).join("")}
-                    <div class="glass-card hero-panel">
-                        <span class="eyebrow">Live recommendation moods</span>
-                        <h3>Tell us your mood. We'll build a reading stack.</h3>
-                        <div class="mood-buttons">
-                            <button class="ghost-btn" type="button" data-mood="happy">Happy reads</button>
-                            <button class="ghost-btn" type="button" data-mood="thriller">Thrillers tonight</button>
-                            <button class="ghost-btn" type="button" data-mood="exam">Exam prep mode</button>
-                            <button class="ghost-btn" type="button" data-mood="weekend">Weekend reads</button>
-                        </div>
-                        <div id="moodResults" class="dynamic-results"></div>
+            <div class="hero-grid">
+                <div class="hero-copy">
+                    <span class="eyebrow">Premium bookstore platform</span>
+                    <h1>Discover, preview, and manage books inside one cinematic storefront.</h1>
+                    <p class="lede hero-lede">BOOKVERSE AI blends a modern online bookstore, immersive reading previews, AI discovery, and clean order operations into a product that feels more startup-ready than student-project simple.</p>
+                    <div class="hero-metrics modern-metrics">
+                        <span class="stat-chip"><strong>${data.catalog_size}</strong><small>titles live</small></span>
+                        <span class="stat-chip"><strong>${data.trending.length}</strong><small>trending now</small></span>
+                        <span class="stat-chip"><strong>${data.best_sellers.length}</strong><small>bestseller picks</small></span>
+                    </div>
+                    <div class="hero-actions">
+                        <a class="primary-btn" href="/store" data-link>Explore catalog</a>
+                        <a class="ghost-btn" href="/community" data-link>See community</a>
                     </div>
                 </div>
+                <aside class="glass-card hero-side-panel">
+                    <span class="eyebrow">Live recommendation moods</span>
+                    <h3>Tell us the vibe. We’ll build a reading stack.</h3>
+                    <div class="mood-buttons">
+                        <button class="ghost-btn" type="button" data-mood="happy">Happy reads</button>
+                        <button class="ghost-btn" type="button" data-mood="thriller">Thrillers tonight</button>
+                        <button class="ghost-btn" type="button" data-mood="exam">Exam prep mode</button>
+                        <button class="ghost-btn" type="button" data-mood="weekend">Weekend reads</button>
+                    </div>
+                    <div id="moodResults" class="dynamic-results"></div>
+                    <div class="hero-stack-preview">
+                        ${data.featured.map((book, index) => `<div class="floating-book modern-book" style="--delay:${index}"><img src="${book.cover}" alt="${escapeHtml(book.title)}"></div>`).join("")}
+                    </div>
+                </aside>
             </div>
         </section>
 
@@ -311,6 +373,7 @@ async function renderHome() {
                 <div>
                     <span class="eyebrow">Trending</span>
                     <h2>New arrivals, best sellers, and live catalog momentum</h2>
+                    <p class="muted-copy">A premium slice of the inventory with real covers, strong ratings, and quick purchase actions.</p>
                 </div>
             </div>
             <div class="slider-track">
@@ -318,8 +381,8 @@ async function renderHome() {
             </div>
         </section>
 
-        <section class="grid-two section-block">
-            <div class="glass-card mood-column">
+        <section class="grid-two section-block surface-grid">
+            <div class="glass-card mood-column premium-surface">
                 <span class="eyebrow">AI Book Match Quiz</span>
                 <h2>Reader compatibility with live shelf overlap.</h2>
                 <div class="assistant-results">
@@ -332,7 +395,7 @@ async function renderHome() {
                     `).join("")}
                 </div>
             </div>
-            <div class="glass-card mood-column">
+            <div class="glass-card mood-column premium-surface">
                 <span class="eyebrow">Recommendation engine</span>
                 <h2>Browse by mood cluster.</h2>
                 ${Object.entries(data.recommendation_groups).map(([label, books]) => `
@@ -356,11 +419,11 @@ async function renderHome() {
                 body: JSON.stringify({ mood: button.dataset.mood })
             });
             target.innerHTML = books.map((book) => `
-                <div class="compact-card">
+                <a class="compact-card mood-result-card" href="/book/${book.id}" data-link>
                     <strong>${escapeHtml(book.title)}</strong>
                     <p>${escapeHtml(book.author)}</p>
                     <small>${escapeHtml(book.reason)}</small>
-                </div>
+                </a>
             `).join("");
         });
     });
@@ -370,14 +433,14 @@ async function renderStore(prefillPrompt = "") {
     const params = routeQuery();
     const data = await api(`/api/store?${params.toString()}`);
     appRoot.innerHTML = `
-        <section class="page-hero compact">
+        <section class="page-hero compact modern-page-hero">
             <span class="eyebrow">Book store</span>
             <h1>Browse a 500+ title inventory with live stock, real covers, and readable previews.</h1>
-            <p class="lede">${data.counts.titles} titles ${data.counts.inventory} copies in inventory ${data.counts.out_of_stock} out of stock</p>
+            <p class="lede">${data.counts.titles} titles · ${data.counts.inventory} copies in inventory · ${data.counts.out_of_stock} out of stock</p>
         </section>
 
         <section class="grid-two">
-            <div class="glass-card form-card">
+            <div class="glass-card form-card premium-surface">
                 <span class="eyebrow">AI store assistant</span>
                 <h2>Ask for a subject, title, or topic and get purchasable options.</h2>
                 <form id="assistantForm" class="assistant-form">
@@ -387,7 +450,7 @@ async function renderStore(prefillPrompt = "") {
                 <p id="assistantMessage" class="assistant-message">Ask for a topic and the assistant will return available options from the current store inventory.</p>
                 <div id="assistantResults" class="assistant-results"></div>
             </div>
-            <div class="glass-card filter-panel">
+            <div class="glass-card filter-panel premium-surface">
                 <form id="filterForm" class="filter-form">
                     <input type="text" name="search" placeholder="Search titles, authors, genres" value="${escapeHtml(params.get("search") || "")}">
                     <select name="genre"><option value="">All genres</option>${data.facets.genres.map((genre) => `<option ${params.get("genre") === genre ? "selected" : ""}>${escapeHtml(genre)}</option>`).join("")}</select>
@@ -464,7 +527,7 @@ async function renderBook(bookId) {
     const { book, reviews, related, author_books } = data;
     appRoot.innerHTML = `
         <section class="detail-layout">
-            <aside class="glass-card detail-cover">
+            <aside class="glass-card detail-cover premium-surface">
                 <img src="${book.cover}" alt="${escapeHtml(book.title)}">
                 <div class="action-row stacked-mobile section-block">
                     <button class="primary-btn" type="button" data-cart="${book.id}" ${book.stock < 1 ? "disabled" : ""}>Add to cart</button>
@@ -472,31 +535,39 @@ async function renderBook(bookId) {
                     <button class="ghost-btn" type="button" data-wishlist="${book.id}">Wishlist</button>
                 </div>
             </aside>
-            <section class="detail-copy">
-                <span class="eyebrow">${escapeHtml(book.genre)} | ${escapeHtml(book.language)}</span>
-                <h1>${escapeHtml(book.title)}</h1>
-                <p>By ${escapeHtml(book.author)} | ${book.rating} / 5 | ${formatCurrency(book.price)}</p>
-                <div class="meta-line">
+              <section class="detail-copy">
+                  <span class="eyebrow">${escapeHtml(book.genre)} | ${escapeHtml(book.language)}</span>
+                  <h1>${escapeHtml(book.title)}</h1>
+                  <p>By ${escapeHtml(book.author)} | ${book.rating} / 5 | ${formatCurrency(book.price)}</p>
+                  <div class="meta-line">
                     <span class="stock-pill ${book.stock > 0 ? "in-stock" : "out-stock"}">${book.stock > 0 ? `${book.stock} copies available` : "Out of stock"}</span>
-                    <span>${book.sold_count} sold</span>
-                    <span>${book.preview_ready ? "Real public-domain preview" : "Metadata preview"}</span>
-                </div>
-                <p>${escapeHtml(book.description)}</p>
-                <div class="glass-card info-card">
-                    <h3>Book summary</h3>
-                    <p>${escapeHtml(book.summary)}</p>
-                </div>
+                      <span>${book.sold_count} sold</span>
+                      <span>${book.preview_ready ? "Real public-domain preview" : "Metadata preview"}</span>
+                  </div>
+                  <p>${escapeHtml(book.description)}</p>
+                  <div class="glass-card info-card premium-surface preview-callout">
+                      <h3>Preview before purchase</h3>
+                      <p>Open the 10-page reader from here anytime, even while deciding whether to add this book to your cart.</p>
+                      <div class="action-row stacked-mobile">
+                          <a class="primary-btn" href="/reader/${book.id}" data-link>Read 10-page preview</a>
+                          <button class="ghost-btn" type="button" data-cart="${book.id}" ${book.stock < 1 ? "disabled" : ""}>Buy this book</button>
+                      </div>
+                  </div>
+                  <div class="glass-card info-card premium-surface">
+                      <h3>Book summary</h3>
+                      <p>${escapeHtml(book.summary)}</p>
+                  </div>
                 <div class="grid-two">
-                    <div class="glass-card info-card">
+                    <div class="glass-card info-card premium-surface">
                         <h3>Related books</h3>
                         <div class="book-inline-list">${related.map(compactBookRow).join("")}</div>
                     </div>
-                    <div class="glass-card info-card">
+                    <div class="glass-card info-card premium-surface">
                         <h3>More from this author</h3>
                         <div class="book-inline-list">${author_books.map(compactBookRow).join("")}</div>
                     </div>
                 </div>
-                <div class="glass-card info-card">
+                <div class="glass-card info-card premium-surface">
                     <h3>Reader reviews</h3>
                     ${reviews.map((review) => `<div class="review-row"><strong>${escapeHtml(review.reviewer)}</strong><span>${review.rating} / 5</span><p>${escapeHtml(review.comment)}</p></div>`).join("")}
                 </div>
@@ -994,7 +1065,18 @@ async function renderAuth(mode) {
         const payload = Object.fromEntries(new FormData(event.currentTarget).entries());
         payload.role = role;
         try {
-            const result = await api(`/api/auth/${mode === "register" ? "register" : "login"}`, { method: "POST", body: JSON.stringify(payload) });
+            const result = await api(`/api/auth/${mode === "register" ? "register" : "login"}`, {
+                method: "POST",
+                body: JSON.stringify(payload),
+                loader: {
+                    title: role === "admin" ? "Opening admin access" : (mode === "register" ? "Creating your account" : "Signing you in"),
+                    message: role === "admin"
+                        ? "Verifying admin credentials and preparing dashboard controls."
+                        : (mode === "register"
+                            ? "Setting up your customer profile and bookstore access."
+                            : "Checking your account and restoring your bookstore session.")
+                }
+            });
             setFlash(result.message);
             await refreshSession();
             navigate(sessionState.is_admin ? "/admin/dashboard" : "/store");
@@ -1202,10 +1284,28 @@ function renderStaticPage(title, body) {
     `;
 }
 
+function setGuestFallbackSession() {
+    sessionState = {
+        authenticated: false,
+        role: "guest",
+        user: { name: "Guest", email: "", phone: "" },
+        cart_count: 0,
+        wishlist_count: 0,
+        is_admin: false
+    };
+    renderSessionChip();
+}
+
 async function renderRoute() {
     const path = routePath();
     document.getElementById("flashStack").innerHTML = "";
-    await refreshSession();
+    showLoader("Opening screen", "Syncing your session and preparing the next view.");
+    try {
+        await refreshSession();
+    } catch (_error) {
+        setGuestFallbackSession();
+        setFlash("Local API is waking up. Showing the storefront shell while the backend reconnects.", "error");
+    }
     if (path === "/") return renderHome();
     if (path === "/store" || path === "/ai-suggestions") return renderStore(path === "/ai-suggestions" ? "science" : "");
     if (path.startsWith("/book/")) return renderBook(path.split("/").pop());
@@ -1226,8 +1326,17 @@ async function renderRoute() {
     if (path === "/admin/orders") return renderAdminOrders();
     if (path === "/contact") return renderStaticPage("Contact", "Reach the BOOKVERSE AI team for product walkthroughs, bookstore onboarding, and demo support.");
     if (path === "/about") return renderStaticPage("About", "BOOKVERSE AI combines an online bookstore, reading preview engine, AI discovery tools, and admin operations in one premium full-stack experience.");
+    hideLoader();
     return renderStaticPage("Page not found", "The requested screen is not available in the static frontend route map yet.");
 }
 
 attachGlobalHandlers();
-renderRoute();
+renderRoute().catch((error) => {
+    console.error("BOOKVERSE boot error:", error);
+    hideLoader();
+    setGuestFallbackSession();
+    renderStaticPage(
+        "Storefront reconnecting",
+        "The frontend loaded, but the local data service is still waking up. Refresh once after a moment and the full bookstore experience will appear."
+    );
+});
